@@ -1,0 +1,3118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light" />
+<title>RecoverLink</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  html, body { margin: 0; padding: 0; min-height: 100%; }
+  #root { min-height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+/* ============================== storage shim (localStorage, per-viewer) ============================== */
+
+window.storage = {
+  async get(key) {
+    try {
+      const v = localStorage.getItem("rl:" + key);
+      if (v === null || v === undefined) return null;
+      return { key, value: v, shared: false };
+    } catch (e) {
+      return null;
+    }
+  },
+  async set(key, value) {
+    try {
+      localStorage.setItem("rl:" + key, value);
+      return { key, value, shared: false };
+    } catch (e) {
+      return null;
+    }
+  },
+};
+
+/* ============================== hand-authored icon set (no external deps) ============================== */
+
+function Icon({ paths, size = 20, color = "currentColor", strokeWidth = 2, fill = "none" }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={fill}
+      stroke={color}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {paths}
+    </svg>
+  );
+}
+
+function Heart(props) {
+  const filled = props.fill && props.fill !== "none";
+  return (
+    <Icon
+      {...props}
+      fill={filled ? props.color || props.fill : "none"}
+      paths={<path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0L12 5.34l-.77-.76a5.4 5.4 0 0 0-7.65 7.65l.77.77L12 21l7.65-7.65.77-.77a5.4 5.4 0 0 0 0-7.65z" />}
+    />
+  );
+}
+function ClipboardList(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <rect x="6" y="4" width="12" height="17" rx="2" />
+          <path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" />
+          <path d="M9 10h6M9 14h6M9 18h3" />
+        </>
+      }
+    />
+  );
+}
+function ImagePlus(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <rect x="3" y="4" width="14" height="14" rx="2" />
+          <circle cx="8" cy="9" r="1.5" />
+          <path d="M3 15l4-4 3 3 3-3 4 4" />
+          <path d="M19 8v6M16 11h6" />
+        </>
+      }
+    />
+  );
+}
+function Brain(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M9 4a3 3 0 0 0-3 3v1a3 3 0 0 0-1.5 5.6A3 3 0 0 0 7 18a3 3 0 0 0 5-2.2V7a3 3 0 0 0-3-3z" />
+          <path d="M15 4a3 3 0 0 1 3 3v1a3 3 0 0 1 1.5 5.6A3 3 0 0 1 17 18a3 3 0 0 1-5-2.2V7a3 3 0 0 1 3-3z" />
+        </>
+      }
+    />
+  );
+}
+function Mail(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M3 6.5l9 6.5 9-6.5" />
+        </>
+      }
+    />
+  );
+}
+function MailCheck(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M20 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8" />
+          <path d="M3 6.5l9 6.5 9-6.5" />
+          <path d="M16.5 17.5l2 2 3.5-4" />
+        </>
+      }
+    />
+  );
+}
+function Stethoscope(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M5 3v5a4 4 0 0 0 8 0V3" />
+          <path d="M5 3H3.5M13 3h1.5" />
+          <path d="M9 12v3a5 5 0 0 0 10 0v-2" />
+          <circle cx="20" cy="11" r="1.6" />
+        </>
+      }
+    />
+  );
+}
+function MessageSquareText(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M4 5h16v11H8l-4 4z" />
+          <path d="M7.5 9h9M7.5 12.5h6" />
+        </>
+      }
+    />
+  );
+}
+function RefreshCcw(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16" />
+          <path d="M3 21v-5h5" />
+        </>
+      }
+    />
+  );
+}
+function ChevronRight(props) {
+  return <Icon {...props} paths={<path d="M9 5l7 7-7 7" />} />;
+}
+function CheckCircle2(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8.5 12.3l2.5 2.5 4.8-5.2" />
+        </>
+      }
+    />
+  );
+}
+function Clock(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3.5 2" />
+        </>
+      }
+    />
+  );
+}
+function AlertTriangle(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M10.6 3.9L2.5 18a1.6 1.6 0 0 0 1.4 2.4h16.2a1.6 1.6 0 0 0 1.4-2.4L13.4 3.9a1.6 1.6 0 0 0-2.8 0z" />
+          <path d="M12 9.5v4M12 17h.01" />
+        </>
+      }
+    />
+  );
+}
+function AlertCircle(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v5M12 16h.01" />
+        </>
+      }
+    />
+  );
+}
+function Send(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M21 3L11 13" />
+          <path d="M21 3l-7 18-4-8-8-4z" />
+        </>
+      }
+    />
+  );
+}
+function ThumbsUp(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z" />
+          <path d="M7 11l3.5-7a2 2 0 0 1 2 2.2L11.7 9H18a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 16.6 20H10a3 3 0 0 1-3-3" />
+        </>
+      }
+    />
+  );
+}
+function ThumbsDown(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1z" />
+          <path d="M17 13l-3.5 7a2 2 0 0 1-2-2.2L12.3 15H6a2 2 0 0 1-2-2.4l1.4-7A2 2 0 0 1 7.4 4H14a3 3 0 0 1 3 3" />
+        </>
+      }
+    />
+  );
+}
+function Camera(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M4 8h3l2-2h6l2 2h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+          <circle cx="12" cy="13.5" r="3.5" />
+        </>
+      }
+    />
+  );
+}
+function SettingsIcon(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+        </>
+      }
+    />
+  );
+}
+function HistoryIcon(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M3 12a9 9 0 1 0 3-6.7" />
+          <path d="M3 4v4.5h4.5" />
+          <path d="M12 7v5l3.5 2" />
+        </>
+      }
+    />
+  );
+}
+function CalendarCheck2(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <rect x="3.5" y="5" width="17" height="16" rx="2" />
+          <path d="M8 3v4M16 3v4M3.5 10h17" />
+          <path d="M8.5 15.3l2 2 4.5-4.6" />
+        </>
+      }
+    />
+  );
+}
+function Activity(props) {
+  return <Icon {...props} paths={<path d="M3 12h4l2.5-8 4 16 2.5-8H21" />} />;
+}
+function Droplet(props) {
+  return <Icon {...props} paths={<path d="M12 2.5S5.5 10 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10 12 2.5 12 2.5z" />} />;
+}
+function Wind(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M3 8h10.5a2.5 2.5 0 1 0-2.3-3.5" />
+          <path d="M3 12h14.5a2.5 2.5 0 1 1-2.3 3.5" />
+          <path d="M3 16h8.5a2.5 2.5 0 1 1-2.3 3.5" />
+        </>
+      }
+    />
+  );
+}
+function Moon(props) {
+  return <Icon {...props} paths={<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4 7 7 0 0 0 20 14.5z" />} />;
+}
+function SlidersHorizontal(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M4 6h7M15 6h5M4 12h11M19 12h1M4 18h3M11 18h9" />
+          <circle cx="13" cy="6" r="2" />
+          <circle cx="17" cy="12" r="2" />
+          <circle cx="9" cy="18" r="2" />
+        </>
+      }
+    />
+  );
+}
+function LogOut(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M9 20H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" />
+          <path d="M16 17l4-5-4-5M20 12H9" />
+        </>
+      }
+    />
+  );
+}
+function User(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21c1.5-4.5 5-6.5 8-6.5s6.5 2 8 6.5" />
+        </>
+      }
+    />
+  );
+}
+function ShieldCheck(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M12 3l7 3v5.5c0 4.6-3 8-7 9.5-4-1.5-7-4.9-7-9.5V6z" />
+          <path d="M9 12l2 2 4-4.2" />
+        </>
+      }
+    />
+  );
+}
+function TrendingUp(props) {
+  return (
+    <Icon
+      {...props}
+      paths={
+        <>
+          <path d="M3 16l6.5-6.5 4 4L21 6" />
+          <path d="M15 6h6v6" />
+        </>
+      }
+    />
+  );
+}
+
+
+/* ============================== i18n ============================== */
+
+const LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "zh", label: "中文" },
+  { code: "th", label: "ไทย" },
+  { code: "fr", label: "Français" },
+  { code: "es", label: "Español" },
+];
+
+const CLINICS = ["The Art Clinic", "S45 Clinic", "Trinity Clinic", "Clinic PSC", "MAXi Cosmetic Surgery"];
+const SURGERY_TYPE_KEYS = ["facelift", "rhinoplasty", "doubleEyelid", "vline"];
+
+// Clinic -> booking email. Last set from a spreadsheet the user provided directly.
+const CLINIC_EMAILS = {
+  "The Art Clinic": "st127160@ait.asia",
+  "S45 Clinic": "st126103@ait.asia",
+  "Trinity Clinic": "st127126@ait.asia",
+  "Clinic PSC": "st127069@ait.asia",
+  "MAXi Cosmetic Surgery": "st126640@ait.asia",
+};
+
+function clinicEmail(clinicName) {
+  const raw = CLINIC_EMAILS[clinicName];
+  if (!raw) return "";
+  // Guard against stray trailing punctuation from sheet copy/paste (e.g. "name@x.co,").
+  return raw.trim().replace(/[,;]+$/, "");
+}
+
+const TRANSLATIONS = {
+  en: {
+    "nav.home": "Home", "nav.tracker": "Tracker", "nav.booking": "Book appointment", "nav.language": "Language",
+    "account.intro": "Sign in or create an account with your email to save your history.",
+    "account.storageOffline": "Storage's offline, continuing as a guest for this session.",
+    "account.name": "Your name", "account.email": "Email", "account.surgeryDate": "Surgery date",
+    "account.clinic": "Clinic", "account.clinicPlaceholder": "Select your clinic",
+    "account.surgeryType": "Type of surgery", "account.surgeryTypePlaceholder": "Select your surgery type",
+    "account.doctorName": "Doctor's name", "account.continue": "Continue", "account.checking": "Checking...",
+    "account.welcomeBack": "Welcome back, {name}.", "account.welcomeBackGeneric": "Welcome back.",
+    "account.errorName": "Name is required.", "account.errorEmail": "Email is required.",
+    "account.errorSurgeryDate": "Surgery date is required.", "account.errorClinic": "Please select a clinic.",
+    "account.errorSurgeryType": "Please select a surgery type.",
+    "onboarding.text": "A one-minute daily check-in, reviewed by AI and backed by your care team. Not a diagnosis.",
+    "onboarding.consent": "I consent to my check-in data being used this way.", "onboarding.begin": "Begin my check-ins",
+    "checkin.dayTitle": "Day {day} check-in", "checkin.pain": "Pain", "checkin.swelling": "Swelling",
+    "checkin.congestion": "Congestion", "checkin.sleep": "Sleep quality", "checkin.notes": "Anything else?",
+    "checkin.notesPlaceholder": "Optional", "checkin.addPhoto": "Add a photo (optional)", "checkin.remove": "Remove",
+    "checkin.send": "Send check-in",
+    "symptom.none": "none", "symptom.mild": "mild", "symptom.moderate": "moderate", "symptom.severe": "severe",
+    "pipeline.validating": "Validating check-in", "pipeline.history": "Reviewing history",
+    "pipeline.analyzingPhoto": "Analyzing photo", "pipeline.checkingPhoto": "Checking for photo",
+    "pipeline.assessing": "Assessing recovery", "pipeline.notifying": "Notifying care team",
+    "pipeline.saving": "Saving update", "pipeline.scheduling": "Scheduling reminder",
+    "loading.default": "Reviewing your check-in...",
+    "error.text": "Couldn't send your check-in. It's saved on this device. Try again, or contact your clinic if it's urgent.",
+    "error.retry": "Try again",
+    "status.normal": "Normal", "status.monitor": "Monitor", "status.urgent": "Urgent",
+    "triage.urgentRedFlag": "Please contact your clinic now.",
+    "triage.urgentPattern": "Outside the usual pattern for day {day}, please contact your clinic.",
+    "triage.monitor": "A bit outside pattern for day {day}, your clinic will take a look.",
+    "triage.normal": "Normal for day {day}. We'll check in again tomorrow.",
+    "visual.failed": "Couldn't analyze your photo, saved for your clinic to review.",
+    "visual.urgent": "Photo shows signs consistent with your symptoms.",
+    "visual.monitor": "Photo shows slightly more swelling than expected.",
+    "visual.normal": "No concerns visible in your photo.",
+    "result.trend": "Bigger change than usual since yesterday", "result.photoTip": "A photo next time helps your clinic too",
+    "result.contactClinic": "Contact my clinic now", "result.bookAppointment": "Book an appointment",
+    "result.optional": "(optional)", "result.reminderTo": "next reminder to {email}",
+    "result.statusAuto": "Sent automatically", "result.statusReviewed": "Reviewed by your clinic",
+    "result.statusFailed": "Logged, still reaching your clinic", "result.statusPending": "Your clinic is reviewing this",
+    "result.disclaimer": "Not a diagnosis. Contact your clinic directly if this feels urgent.",
+    "result.helpful": "Helpful?", "result.logAnother": "Log another day",
+    "contact.title": "Contact your clinic",
+    "contact.subtitle": "Prepare a simple email using the symptoms from your latest check-in.",
+    "contact.step1": "1. Select clinic",
+    "contact.step2": "2. Confirm your email",
+    "contact.step3": "3. Review and send",
+    "contact.clinic": "Clinic",
+    "contact.clinicPlaceholder": "Select your clinic",
+    "contact.clinicEmail": "Clinic email",
+    "contact.patientEmail": "Your email",
+    "contact.emailPlaceholder": "Enter your email",
+    "contact.emailNote": "This is the email address the clinic can use to reply to you.",
+    "contact.subject": "Subject",
+    "contact.message": "Email message",
+    "contact.send": "Open email and send",
+    "contact.back": "Back to recovery result",
+    "contact.emailAppNote": "Your email app will open with the clinic address, subject and message already filled in. You can review it once more before sending.",
+    "contact.opened": "Your email app should be opening now. If it did not open, copy the message and send it from your email app.",
+    "contact.copy": "Copy email details",
+    "contact.copied": "Copied",
+    "contact.noClinicEmail": "No email is available for this clinic.",
+    "contact.requiredEmail": "Please enter a valid email address.",
+    "contact.symptomsHeading": "Symptoms from your check-in",
+    "contact.photoNote": "A photo was added to this check-in. It is not attached to this email; the clinic can ask you for it if needed.",
+    "history.empty": "No check-ins yet, your first takes about a minute.", "history.start": "Start today's check-in",
+    "history.painTrend": "Pain trend", "history.dayLabel": "Day {day}",
+    "settings.guest": "Guest", "settings.bullet1": "AI suggests, never diagnoses. Your clinic reviews anything flagged.",
+    "settings.bullet2": "Data kept for your recovery period plus 90 days, then deleted.",
+    "settings.deleteHistory": "Delete history", "settings.cleared": "History cleared.", "settings.signOut": "Sign out",
+    "tracker.title": "Recovery tracker", "tracker.testingTools": "Testing tools", "tracker.simTotal": "Total failure",
+    "tracker.simPhoto": "Photo-analysis failure", "tracker.simNotify": "Notify failure",
+    "tracker.dayOf": "Day {day} of ~6 weeks",
+    "tab.checkin": "Check-in", "tab.history": "History", "tab.settings": "Settings",
+    "booking.title": "Book an appointment", "booking.subtitle": "No concern needed, routine check-ups welcome too.",
+    "booking.reason": "Reason", "booking.reasonRoutine": "Routine follow-up", "booking.reasonConcern": "I have a concern",
+    "booking.reasonOther": "Other", "booking.date": "Date", "booking.time": "Time",
+    "booking.notes": "Notes (optional)", "booking.email": "Email", "booking.send": "Send request",
+    "booking.clinicEmail": "Clinic email", "booking.clinicEmailNote": "Auto-filled from the clinic you signed in with",
+    "booking.clinicEmailMissing": "No email on file for this clinic yet",
+    "booking.mailSubject": "Appointment request", "booking.mailBodyIntro": "Hi, I'd like to request an appointment.",
+    "booking.mailBodyReason": "Reason", "booking.mailBodyDate": "Preferred date", "booking.mailBodyTime": "Preferred time",
+    "booking.mailBodyNotes": "Notes", "booking.mailBodyFrom": "Patient email",
+    "booking.sending": "Sending your request...", "booking.sentWaiting": "Delivered, waiting on your clinic...",
+    "booking.assistantChecking": "Assistant checking availability...", "booking.toClinic": "clinic",
+    "booking.confirmed": "Confirmed", "booking.adjusted": "Moved to fit clinic hours (9 to 5).",
+    "booking.bookAnother": "Book another",
+    "step.sent": "Sent", "step.reviewing": "Reviewing", "step.confirmed": "Confirmed",
+    "home.title": "Post-Surgery Recovery Support", "home.subtitle": "Stay connected with your doctor. Recover with confidence.",
+    "home.confidence": "Recover with confidence", "home.trackBtn": "Track my recovery", "home.bookBtn": "Book an appointment",
+    "home.betterInfo": "Better care. A smoother recovery.",
+    "journey.track": "Track symptoms", "journey.upload": "Upload updates", "journey.ai": "AI analyzes",
+    "journey.share": "Share with doctor", "journey.review": "Doctor reviews",
+    "wf1.title": "Track your recovery", "wf1.body": "Log pain, swelling and sleep daily.",
+    "wf2.title": "Upload updates", "wf2.body": "Photos, documents and quick notes.",
+    "wf3.title": "AI analyzes", "wf3.body": "Compared against your recovery history.",
+    "wf4.title": "Share via email", "wf4.body": "One secure link to your clinic.",
+    "wf5.title": "Doctor reviews", "wf5.body": "Photos, symptoms and AI summary.",
+    "wf6.title": "Get guidance", "wf6.body": "Personalized feedback, in app.",
+    "wf7.title": "Keep going", "wf7.body": "Reminders keep you on track.",
+    "pipe1.title": "Input", "pipe1.sub": "data and photos", "pipe2.title": "AI review", "pipe2.sub": "history and symptoms",
+    "pipe3.title": "Summary", "pipe3.sub": "clear report", "pipe4.title": "Email link", "pipe4.sub": "to your doctor",
+    "pipe5.title": "Review", "pipe5.sub": "feedback", "pipe6.title": "Support", "pipe6.sub": "ongoing tracking",
+    "benefit1": "Personalized reminders", "benefit2": "Early concern detection", "benefit3": "Secure doctor sharing",
+    "benefit4": "Peace of mind",
+    "surgeryType.facelift": "Facelift", "surgeryType.rhinoplasty": "Rhinoplasty",
+    "surgeryType.doubleEyelid": "Double Eyelid", "surgeryType.vline": "V-Line",
+    "checkin.bruising": "Bruising", "checkin.tightness": "Tightness / tension",
+    "checkin.numbness": "Numbness / tingling", "checkin.numbness.where": "Where? (optional)",
+    "checkin.breathing": "Breathing difficulty", "checkin.eyeDryness": "Eye dryness / irritation / blurry vision",
+    "checkin.chewing": "Chewing difficulty / jaw stiffness", "checkin.mood": "Mood",
+    "checkin.tagsLabel": "Quick tags",
+    "chewing.normal": "Normal", "chewing.soft": "Soft foods only", "chewing.liquid": "Liquid diet",
+    "chewing.painful": "Painful to chew",
+    "yesno.yes": "Yes", "yesno.no": "No",
+    "mood.cry": "Struggling", "mood.neutral": "Okay", "mood.happy": "Good", "mood.great": "Great",
+    "bodymap.forehead": "Forehead", "bodymap.temple": "Temple", "bodymap.cheek": "Cheek",
+    "bodymap.nose": "Nose", "bodymap.jaw": "Jaw", "bodymap.chin": "Chin",
+    "tag.facelift.0": "Tightness", "tag.facelift.1": "Itching", "tag.facelift.2": "Nerve pain",
+    "tag.rhinoplasty.0": "Nasal dryness", "tag.rhinoplasty.1": "Whistling sound", "tag.rhinoplasty.2": "Nerve pain",
+    "tag.doubleEyelid.0": "Itching", "tag.doubleEyelid.1": "Eye fatigue", "tag.doubleEyelid.2": "Nerve pain",
+    "tag.vline.0": "Jaw tightness", "tag.vline.1": "Ear pain", "tag.vline.2": "Nerve pain",
+    "history.swellingTrend": "Swelling", "history.painLegend": "Pain",
+    "history.trendDown": "Your overall trend is improving, even counting today.",
+    "history.trendUp": "Your overall trend has been ticking up lately, worth a look.",
+    "history.trendSteady": "Your overall trend has been holding steady.",
+    "tip.title": "Did you know?",
+    "tip.0": "Swelling is often worse in the morning and improves throughout the day. This is normal.",
+    "tip.1": "Bruising typically changes color as it heals, from red-purple to yellow-green before fading.",
+    "tip.2": "Staying hydrated and keeping your head elevated while resting can help reduce swelling.",
+    "tip.3": "Pain can fluctuate day to day even as your overall recovery trends in the right direction.",
+    "tip.4": "Gentle movement (as approved by your clinic) can support circulation and healing.",
+    "tip.5": "Numbness and tingling near incision sites are common while nerves reconnect, and usually fade over weeks.",
+    "tip.6": "Getting enough sleep supports tissue repair, try to keep a consistent routine even if it's disrupted.",
+    "tip.7": "Avoid strenuous activity or heavy lifting until your clinic clears you, even if you're feeling good.",
+  },
+  fr: {
+    "nav.home": "Accueil", "nav.tracker": "Suivi", "nav.booking": "Prendre rendez-vous", "nav.language": "Langue",
+    "account.intro": "Connectez-vous ou créez un compte avec votre e-mail pour enregistrer votre historique.",
+    "account.storageOffline": "Stockage hors ligne, vous continuez en mode invité pour cette session.",
+    "account.name": "Votre nom", "account.email": "E-mail", "account.surgeryDate": "Date de l'opération",
+    "account.clinic": "Clinique", "account.clinicPlaceholder": "Choisissez votre clinique",
+    "account.surgeryType": "Type d'intervention", "account.surgeryTypePlaceholder": "Choisissez votre type d'intervention",
+    "account.doctorName": "Nom du médecin", "account.continue": "Continuer", "account.checking": "Vérification...",
+    "account.welcomeBack": "Bon retour, {name}.", "account.welcomeBackGeneric": "Bon retour.",
+    "account.errorName": "Le nom est requis.", "account.errorEmail": "L'e-mail est requis.",
+    "account.errorSurgeryDate": "La date de l'opération est requise.", "account.errorClinic": "Veuillez choisir une clinique.",
+    "account.errorSurgeryType": "Veuillez choisir un type d'intervention.",
+    "onboarding.text": "Un point quotidien d'une minute, examiné par l'IA et suivi par votre équipe soignante. Ce n'est pas un diagnostic.",
+    "onboarding.consent": "J'accepte que mes données de suivi soient utilisées de cette façon.",
+    "onboarding.begin": "Commencer mes suivis",
+    "checkin.dayTitle": "Suivi du jour {day}", "checkin.pain": "Douleur", "checkin.swelling": "Gonflement",
+    "checkin.congestion": "Congestion", "checkin.sleep": "Qualité du sommeil", "checkin.notes": "Autre chose ?",
+    "checkin.notesPlaceholder": "Facultatif", "checkin.addPhoto": "Ajouter une photo (facultatif)",
+    "checkin.remove": "Retirer", "checkin.send": "Envoyer le suivi",
+    "symptom.none": "aucun", "symptom.mild": "léger", "symptom.moderate": "modéré", "symptom.severe": "sévère",
+    "pipeline.validating": "Validation du suivi", "pipeline.history": "Analyse de l'historique",
+    "pipeline.analyzingPhoto": "Analyse de la photo", "pipeline.checkingPhoto": "Vérification de la photo",
+    "pipeline.assessing": "Évaluation de la récupération", "pipeline.notifying": "Notification de l'équipe soignante",
+    "pipeline.saving": "Enregistrement", "pipeline.scheduling": "Programmation du rappel",
+    "loading.default": "Analyse de votre suivi...",
+    "error.text": "Impossible d'envoyer votre suivi. Il est enregistré sur cet appareil. Réessayez, ou contactez votre clinique si c'est urgent.",
+    "error.retry": "Réessayer",
+    "status.normal": "Normal", "status.monitor": "À surveiller", "status.urgent": "Urgent",
+    "triage.urgentRedFlag": "Veuillez contacter votre clinique maintenant.",
+    "triage.urgentPattern": "En dehors du schéma habituel pour le jour {day}, veuillez contacter votre clinique.",
+    "triage.monitor": "Un peu en dehors du schéma pour le jour {day}, votre clinique va y jeter un œil.",
+    "triage.normal": "Normal pour le jour {day}. Nous referons un point demain.",
+    "visual.failed": "Impossible d'analyser votre photo, elle est conservée pour l'examen de votre clinique.",
+    "visual.urgent": "La photo montre des signes cohérents avec vos symptômes.",
+    "visual.monitor": "La photo montre un peu plus de gonflement que prévu.",
+    "visual.normal": "Aucune inquiétude visible sur la photo.",
+    "result.trend": "Changement plus important que d'habitude depuis hier",
+    "result.photoTip": "Une photo la prochaine fois aide aussi votre clinique",
+    "result.contactClinic": "Contacter ma clinique maintenant", "result.bookAppointment": "Prendre rendez-vous",
+    "result.optional": "(facultatif)", "result.reminderTo": "prochain rappel à {email}",
+    "result.statusAuto": "Envoyé automatiquement", "result.statusReviewed": "Examiné par votre clinique",
+    "result.statusFailed": "Enregistré, en cours d'envoi à votre clinique", "result.statusPending": "Votre clinique examine ceci",
+    "result.disclaimer": "Ce n'est pas un diagnostic. Contactez directement votre clinique si cela vous semble urgent.",
+    "result.helpful": "Utile ?", "result.logAnother": "Enregistrer un autre jour",
+    "contact.title": "Contact your clinic",
+    "contact.subtitle": "Prepare a simple email using the symptoms from your latest check-in.",
+    "contact.step1": "1. Select clinic",
+    "contact.step2": "2. Confirm your email",
+    "contact.step3": "3. Review and send",
+    "contact.clinic": "Clinic",
+    "contact.clinicPlaceholder": "Select your clinic",
+    "contact.clinicEmail": "Clinic email",
+    "contact.patientEmail": "Your email",
+    "contact.emailPlaceholder": "Enter your email",
+    "contact.emailNote": "This is the email address the clinic can use to reply to you.",
+    "contact.subject": "Subject",
+    "contact.message": "Email message",
+    "contact.send": "Open email and send",
+    "contact.back": "Back to recovery result",
+    "contact.emailAppNote": "Your email app will open with the clinic address, subject and message already filled in. You can review it once more before sending.",
+    "contact.opened": "Your email app should be opening now. If it did not open, copy the message and send it from your email app.",
+    "contact.copy": "Copy email details",
+    "contact.copied": "Copied",
+    "contact.noClinicEmail": "No email is available for this clinic.",
+    "contact.requiredEmail": "Please enter a valid email address.",
+    "contact.symptomsHeading": "Symptoms from your check-in",
+    "contact.photoNote": "A photo was added to this check-in. It is not attached to this email; the clinic can ask you for it if needed.",
+    "history.empty": "Aucun suivi pour l'instant, le premier prend environ une minute.",
+    "history.start": "Commencer le suivi du jour", "history.painTrend": "Évolution de la douleur",
+    "history.dayLabel": "Jour {day}",
+    "settings.guest": "Invité",
+    "settings.bullet1": "L'IA suggère, elle ne diagnostique jamais. Votre clinique examine tout ce qui est signalé.",
+    "settings.bullet2": "Données conservées pendant votre période de récupération plus 90 jours, puis supprimées.",
+    "settings.deleteHistory": "Supprimer l'historique", "settings.cleared": "Historique supprimé.",
+    "settings.signOut": "Se déconnecter",
+    "tracker.title": "Suivi de récupération", "tracker.testingTools": "Outils de test",
+    "tracker.simTotal": "Échec total", "tracker.simPhoto": "Échec de l'analyse photo",
+    "tracker.simNotify": "Échec de notification", "tracker.dayOf": "Jour {day} sur environ 6 semaines",
+    "tab.checkin": "Suivi", "tab.history": "Historique", "tab.settings": "Réglages",
+    "booking.title": "Prendre rendez-vous",
+    "booking.subtitle": "Aucune inquiétude nécessaire, les contrôles de routine sont aussi les bienvenus.",
+    "booking.reason": "Motif", "booking.reasonRoutine": "Contrôle de routine", "booking.reasonConcern": "J'ai une inquiétude",
+    "booking.reasonOther": "Autre", "booking.date": "Date", "booking.time": "Heure",
+    "booking.notes": "Remarques (facultatif)", "booking.email": "E-mail", "booking.send": "Envoyer la demande",
+    "booking.sending": "Envoi de votre demande...", "booking.sentWaiting": "Livré, en attente de votre clinique...",
+    "booking.assistantChecking": "L'assistant vérifie les disponibilités...", "booking.toClinic": "clinique",
+    "booking.confirmed": "Confirmé", "booking.adjusted": "Déplacé pour respecter les horaires de la clinique (9h à 17h).",
+    "booking.bookAnother": "Prendre un autre rendez-vous",
+    "step.sent": "Envoyé", "step.reviewing": "Examen", "step.confirmed": "Confirmé",
+    "home.title": "Accompagnement après une chirurgie",
+    "home.subtitle": "Restez connecté à votre médecin. Récupérez en toute confiance.",
+    "home.confidence": "Récupérez en confiance", "home.trackBtn": "Suivre ma récupération",
+    "home.bookBtn": "Prendre rendez-vous", "home.betterInfo": "Meilleurs soins. Une récupération plus sereine.",
+    "journey.track": "Suivre les symptômes", "journey.upload": "Envoyer des mises à jour",
+    "journey.ai": "L'IA analyse", "journey.share": "Partager avec le médecin", "journey.review": "Le médecin examine",
+    "wf1.title": "Suivez votre récupération", "wf1.body": "Notez douleur, gonflement et sommeil chaque jour.",
+    "wf2.title": "Envoyez des mises à jour", "wf2.body": "Photos, documents et notes rapides.",
+    "wf3.title": "L'IA analyse", "wf3.body": "Comparé à votre historique de récupération.",
+    "wf4.title": "Partagez par e-mail", "wf4.body": "Un lien sécurisé vers votre clinique.",
+    "wf5.title": "Le médecin examine", "wf5.body": "Photos, symptômes et résumé de l'IA.",
+    "wf6.title": "Recevez des conseils", "wf6.body": "Retour personnalisé, dans l'application.",
+    "wf7.title": "Continuez", "wf7.body": "Des rappels pour rester sur la bonne voie.",
+    "pipe1.title": "Saisie", "pipe1.sub": "données et photos", "pipe2.title": "Analyse IA",
+    "pipe2.sub": "historique et symptômes", "pipe3.title": "Résumé", "pipe3.sub": "rapport clair",
+    "pipe4.title": "Lien e-mail", "pipe4.sub": "vers votre médecin", "pipe5.title": "Examen", "pipe5.sub": "retour",
+    "pipe6.title": "Suivi", "pipe6.sub": "suivi continu",
+    "benefit1": "Rappels personnalisés", "benefit2": "Détection précoce", "benefit3": "Partage sécurisé",
+    "benefit4": "Tranquillité d'esprit",
+    "surgeryType.facelift": "Lifting du visage", "surgeryType.rhinoplasty": "Rhinoplastie",
+    "surgeryType.doubleEyelid": "Double paupière", "surgeryType.vline": "V-Line",
+  },
+  es: {
+    "nav.home": "Inicio", "nav.tracker": "Seguimiento", "nav.booking": "Reservar cita", "nav.language": "Idioma",
+    "account.intro": "Inicia sesión o crea una cuenta con tu correo para guardar tu historial.",
+    "account.storageOffline": "El almacenamiento está sin conexión, continúas como invitado en esta sesión.",
+    "account.name": "Tu nombre", "account.email": "Correo electrónico", "account.surgeryDate": "Fecha de la cirugía",
+    "account.clinic": "Clínica", "account.clinicPlaceholder": "Selecciona tu clínica",
+    "account.surgeryType": "Tipo de cirugía", "account.surgeryTypePlaceholder": "Selecciona el tipo de cirugía",
+    "account.doctorName": "Nombre del médico", "account.continue": "Continuar", "account.checking": "Verificando...",
+    "account.welcomeBack": "Bienvenido de nuevo, {name}.", "account.welcomeBackGeneric": "Bienvenido de nuevo.",
+    "account.errorName": "El nombre es obligatorio.", "account.errorEmail": "El correo es obligatorio.",
+    "account.errorSurgeryDate": "La fecha de la cirugía es obligatoria.", "account.errorClinic": "Selecciona una clínica.",
+    "account.errorSurgeryType": "Selecciona un tipo de cirugía.",
+    "onboarding.text": "Un chequeo diario de un minuto, revisado por IA y respaldado por tu equipo médico. No es un diagnóstico.",
+    "onboarding.consent": "Acepto que mis datos de seguimiento se usen de esta manera.",
+    "onboarding.begin": "Comenzar mis chequeos",
+    "checkin.dayTitle": "Chequeo del día {day}", "checkin.pain": "Dolor", "checkin.swelling": "Hinchazón",
+    "checkin.congestion": "Congestión", "checkin.sleep": "Calidad del sueño", "checkin.notes": "¿Algo más?",
+    "checkin.notesPlaceholder": "Opcional", "checkin.addPhoto": "Añadir una foto (opcional)",
+    "checkin.remove": "Quitar", "checkin.send": "Enviar chequeo",
+    "symptom.none": "ninguna", "symptom.mild": "leve", "symptom.moderate": "moderada", "symptom.severe": "grave",
+    "pipeline.validating": "Validando el chequeo", "pipeline.history": "Revisando el historial",
+    "pipeline.analyzingPhoto": "Analizando la foto", "pipeline.checkingPhoto": "Comprobando la foto",
+    "pipeline.assessing": "Evaluando la recuperación", "pipeline.notifying": "Notificando al equipo médico",
+    "pipeline.saving": "Guardando la actualización", "pipeline.scheduling": "Programando el recordatorio",
+    "loading.default": "Revisando tu chequeo...",
+    "error.text": "No pudimos enviar tu chequeo. Se guardó en este dispositivo. Vuelve a intentarlo, o contacta a tu clínica si es urgente.",
+    "error.retry": "Reintentar",
+    "status.normal": "Normal", "status.monitor": "Vigilar", "status.urgent": "Urgente",
+    "triage.urgentRedFlag": "Contacta a tu clínica ahora.",
+    "triage.urgentPattern": "Fuera del patrón habitual para el día {day}, contacta a tu clínica.",
+    "triage.monitor": "Un poco fuera del patrón para el día {day}, tu clínica lo revisará.",
+    "triage.normal": "Normal para el día {day}. Volveremos a revisar mañana.",
+    "visual.failed": "No pudimos analizar tu foto, se guardó para que tu clínica la revise.",
+    "visual.urgent": "La foto muestra signos consistentes con tus síntomas.",
+    "visual.monitor": "La foto muestra un poco más de hinchazón de lo esperado.",
+    "visual.normal": "No se observan signos de preocupación en la foto.",
+    "result.trend": "Cambio mayor de lo habitual desde ayer",
+    "result.photoTip": "Una foto la próxima vez también ayuda a tu clínica",
+    "result.contactClinic": "Contactar a mi clínica ahora", "result.bookAppointment": "Reservar una cita",
+    "result.optional": "(opcional)", "result.reminderTo": "próximo recordatorio a {email}",
+    "result.statusAuto": "Enviado automáticamente", "result.statusReviewed": "Revisado por tu clínica",
+    "result.statusFailed": "Registrado, aún llegando a tu clínica", "result.statusPending": "Tu clínica está revisando esto",
+    "result.disclaimer": "No es un diagnóstico. Contacta directamente a tu clínica si esto parece urgente.",
+    "result.helpful": "¿Te resultó útil?", "result.logAnother": "Registrar otro día",
+    "contact.title": "Contact your clinic",
+    "contact.subtitle": "Prepare a simple email using the symptoms from your latest check-in.",
+    "contact.step1": "1. Select clinic",
+    "contact.step2": "2. Confirm your email",
+    "contact.step3": "3. Review and send",
+    "contact.clinic": "Clinic",
+    "contact.clinicPlaceholder": "Select your clinic",
+    "contact.clinicEmail": "Clinic email",
+    "contact.patientEmail": "Your email",
+    "contact.emailPlaceholder": "Enter your email",
+    "contact.emailNote": "This is the email address the clinic can use to reply to you.",
+    "contact.subject": "Subject",
+    "contact.message": "Email message",
+    "contact.send": "Open email and send",
+    "contact.back": "Back to recovery result",
+    "contact.emailAppNote": "Your email app will open with the clinic address, subject and message already filled in. You can review it once more before sending.",
+    "contact.opened": "Your email app should be opening now. If it did not open, copy the message and send it from your email app.",
+    "contact.copy": "Copy email details",
+    "contact.copied": "Copied",
+    "contact.noClinicEmail": "No email is available for this clinic.",
+    "contact.requiredEmail": "Please enter a valid email address.",
+    "contact.symptomsHeading": "Symptoms from your check-in",
+    "contact.photoNote": "A photo was added to this check-in. It is not attached to this email; the clinic can ask you for it if needed.",
+    "history.empty": "Aún no hay chequeos, el primero toma un minuto.", "history.start": "Comenzar el chequeo de hoy",
+    "history.painTrend": "Tendencia del dolor", "history.dayLabel": "Día {day}",
+    "settings.guest": "Invitado",
+    "settings.bullet1": "La IA sugiere, nunca diagnostica. Tu clínica revisa todo lo marcado.",
+    "settings.bullet2": "Los datos se guardan durante tu periodo de recuperación más 90 días, luego se eliminan.",
+    "settings.deleteHistory": "Eliminar historial", "settings.cleared": "Historial eliminado.",
+    "settings.signOut": "Cerrar sesión",
+    "tracker.title": "Seguimiento de recuperación", "tracker.testingTools": "Herramientas de prueba",
+    "tracker.simTotal": "Fallo total", "tracker.simPhoto": "Fallo del análisis de foto",
+    "tracker.simNotify": "Fallo de notificación", "tracker.dayOf": "Día {day} de unas 6 semanas",
+    "tab.checkin": "Chequeo", "tab.history": "Historial", "tab.settings": "Ajustes",
+    "booking.title": "Reservar una cita",
+    "booking.subtitle": "No hace falta tener una preocupación, los chequeos de rutina también son bienvenidos.",
+    "booking.reason": "Motivo", "booking.reasonRoutine": "Seguimiento de rutina", "booking.reasonConcern": "Tengo una preocupación",
+    "booking.reasonOther": "Otro", "booking.date": "Fecha", "booking.time": "Hora",
+    "booking.notes": "Notas (opcional)", "booking.email": "Correo electrónico", "booking.send": "Enviar solicitud",
+    "booking.sending": "Enviando tu solicitud...", "booking.sentWaiting": "Entregado, esperando a tu clínica...",
+    "booking.assistantChecking": "El asistente está revisando la disponibilidad...", "booking.toClinic": "clínica",
+    "booking.confirmed": "Confirmado", "booking.adjusted": "Se ajustó para el horario de la clínica (9 a 17).",
+    "booking.bookAnother": "Reservar otra cita",
+    "step.sent": "Enviado", "step.reviewing": "Revisando", "step.confirmed": "Confirmado",
+    "home.title": "Apoyo en la recuperación posquirúrgica",
+    "home.subtitle": "Mantente conectado con tu médico. Recupérate con confianza.",
+    "home.confidence": "Recupérate con confianza", "home.trackBtn": "Seguir mi recuperación",
+    "home.bookBtn": "Reservar una cita", "home.betterInfo": "Mejor atención. Una recuperación más tranquila.",
+    "journey.track": "Seguir síntomas", "journey.upload": "Subir actualizaciones", "journey.ai": "La IA analiza",
+    "journey.share": "Compartir con el médico", "journey.review": "El médico revisa",
+    "wf1.title": "Sigue tu recuperación", "wf1.body": "Registra dolor, hinchazón y sueño cada día.",
+    "wf2.title": "Sube actualizaciones", "wf2.body": "Fotos, documentos y notas rápidas.",
+    "wf3.title": "La IA analiza", "wf3.body": "Comparado con tu historial de recuperación.",
+    "wf4.title": "Comparte por correo", "wf4.body": "Un enlace seguro a tu clínica.",
+    "wf5.title": "El médico revisa", "wf5.body": "Fotos, síntomas y resumen de la IA.",
+    "wf6.title": "Recibe orientación", "wf6.body": "Comentarios personalizados, en la app.",
+    "wf7.title": "Continúa", "wf7.body": "Recordatorios para mantenerte en curso.",
+    "pipe1.title": "Entrada", "pipe1.sub": "datos y fotos", "pipe2.title": "Análisis IA", "pipe2.sub": "historial y síntomas",
+    "pipe3.title": "Resumen", "pipe3.sub": "informe claro", "pipe4.title": "Enlace por correo", "pipe4.sub": "a tu médico",
+    "pipe5.title": "Revisión", "pipe5.sub": "comentarios", "pipe6.title": "Apoyo", "pipe6.sub": "seguimiento continuo",
+    "benefit1": "Recordatorios personalizados", "benefit2": "Detección temprana", "benefit3": "Uso compartido seguro",
+    "benefit4": "Tranquilidad",
+    "surgeryType.facelift": "Lifting facial", "surgeryType.rhinoplasty": "Rinoplastia",
+    "surgeryType.doubleEyelid": "Párpado doble", "surgeryType.vline": "V-Line",
+  },
+  zh: {
+    "nav.home": "首页", "nav.tracker": "追踪", "nav.booking": "预约", "nav.language": "语言",
+    "account.intro": "使用您的邮箱登录或创建账户，以保存您的记录。",
+    "account.storageOffline": "存储服务离线，本次将以访客身份继续。",
+    "account.name": "您的姓名", "account.email": "邮箱", "account.surgeryDate": "手术日期",
+    "account.clinic": "诊所", "account.clinicPlaceholder": "请选择您的诊所",
+    "account.surgeryType": "手术类型", "account.surgeryTypePlaceholder": "请选择手术类型",
+    "account.doctorName": "医生姓名", "account.continue": "继续", "account.checking": "正在检查...",
+    "account.welcomeBack": "欢迎回来，{name}。", "account.welcomeBackGeneric": "欢迎回来。",
+    "account.errorName": "请填写姓名。", "account.errorEmail": "请填写邮箱。",
+    "account.errorSurgeryDate": "请填写手术日期。", "account.errorClinic": "请选择诊所。",
+    "account.errorSurgeryType": "请选择手术类型。",
+    "onboarding.text": "每天一分钟的健康打卡，由AI审核，并有您的医护团队把关。这不是诊断。",
+    "onboarding.consent": "我同意我的打卡数据按此方式使用。", "onboarding.begin": "开始打卡",
+    "checkin.dayTitle": "第{day}天打卡", "checkin.pain": "疼痛", "checkin.swelling": "肿胀",
+    "checkin.congestion": "鼻塞", "checkin.sleep": "睡眠质量", "checkin.notes": "还有其他要说的吗？",
+    "checkin.notesPlaceholder": "可选", "checkin.addPhoto": "添加照片（可选）", "checkin.remove": "移除",
+    "checkin.send": "提交打卡",
+    "symptom.none": "无", "symptom.mild": "轻度", "symptom.moderate": "中度", "symptom.severe": "重度",
+    "pipeline.validating": "正在验证打卡", "pipeline.history": "正在查看历史记录",
+    "pipeline.analyzingPhoto": "正在分析照片", "pipeline.checkingPhoto": "正在检查照片",
+    "pipeline.assessing": "正在评估恢复情况", "pipeline.notifying": "正在通知医护团队",
+    "pipeline.saving": "正在保存记录", "pipeline.scheduling": "正在安排提醒",
+    "loading.default": "正在审核您的打卡...",
+    "error.text": "打卡发送失败。数据已保存在本设备上。请重试，若情况紧急请直接联系诊所。",
+    "error.retry": "重试",
+    "status.normal": "正常", "status.monitor": "需观察", "status.urgent": "紧急",
+    "triage.urgentRedFlag": "请立即联系您的诊所。",
+    "triage.urgentPattern": "第{day}天的情况明显超出常见范围，请联系您的诊所。",
+    "triage.monitor": "第{day}天的情况略有偏离，您的诊所会进一步查看。",
+    "triage.normal": "第{day}天情况正常。我们明天再次为您打卡。",
+    "visual.failed": "无法自动分析您的照片，已保存供诊所查看。",
+    "visual.urgent": "照片显示的情况与您描述的症状一致。",
+    "visual.monitor": "照片显示的肿胀略高于预期。",
+    "visual.normal": "照片中未见明显异常。",
+    "result.trend": "较昨天有明显变化", "result.photoTip": "下次附上照片也能帮助诊所了解情况",
+    "result.contactClinic": "立即联系诊所", "result.bookAppointment": "预约就诊",
+    "result.optional": "（可选）", "result.reminderTo": "下一次提醒将发送至{email}",
+    "result.statusAuto": "已自动发送", "result.statusReviewed": "已由诊所审核",
+    "result.statusFailed": "已记录，仍在尝试通知诊所", "result.statusPending": "您的诊所正在审核此记录",
+    "result.disclaimer": "这不是诊断。如感到紧急，请直接联系诊所。",
+    "result.helpful": "有帮助吗？", "result.logAnother": "记录另一天",
+    "contact.title": "Contact your clinic",
+    "contact.subtitle": "Prepare a simple email using the symptoms from your latest check-in.",
+    "contact.step1": "1. Select clinic",
+    "contact.step2": "2. Confirm your email",
+    "contact.step3": "3. Review and send",
+    "contact.clinic": "Clinic",
+    "contact.clinicPlaceholder": "Select your clinic",
+    "contact.clinicEmail": "Clinic email",
+    "contact.patientEmail": "Your email",
+    "contact.emailPlaceholder": "Enter your email",
+    "contact.emailNote": "This is the email address the clinic can use to reply to you.",
+    "contact.subject": "Subject",
+    "contact.message": "Email message",
+    "contact.send": "Open email and send",
+    "contact.back": "Back to recovery result",
+    "contact.emailAppNote": "Your email app will open with the clinic address, subject and message already filled in. You can review it once more before sending.",
+    "contact.opened": "Your email app should be opening now. If it did not open, copy the message and send it from your email app.",
+    "contact.copy": "Copy email details",
+    "contact.copied": "Copied",
+    "contact.noClinicEmail": "No email is available for this clinic.",
+    "contact.requiredEmail": "Please enter a valid email address.",
+    "contact.symptomsHeading": "Symptoms from your check-in",
+    "contact.photoNote": "A photo was added to this check-in. It is not attached to this email; the clinic can ask you for it if needed.",
+    "history.empty": "还没有打卡记录，第一次大约需要一分钟。", "history.start": "开始今天的打卡",
+    "history.painTrend": "疼痛趋势", "history.dayLabel": "第{day}天",
+    "settings.guest": "访客",
+    "settings.bullet1": "AI仅提供建议，绝不做诊断。诊所会审核所有被标记的情况。",
+    "settings.bullet2": "数据会保留至恢复期结束后再加90天，之后删除。",
+    "settings.deleteHistory": "删除记录", "settings.cleared": "记录已清除。", "settings.signOut": "退出登录",
+    "tracker.title": "恢复追踪", "tracker.testingTools": "测试工具", "tracker.simTotal": "模拟完全失败",
+    "tracker.simPhoto": "模拟照片分析失败", "tracker.simNotify": "模拟通知失败",
+    "tracker.dayOf": "第{day}天 / 约6周",
+    "tab.checkin": "打卡", "tab.history": "记录", "tab.settings": "设置",
+    "booking.title": "预约就诊", "booking.subtitle": "无需有担忧才能预约，常规复查同样欢迎。",
+    "booking.reason": "预约原因", "booking.reasonRoutine": "常规复查", "booking.reasonConcern": "我有一些担忧",
+    "booking.reasonOther": "其他", "booking.date": "日期", "booking.time": "时间",
+    "booking.notes": "备注（可选）", "booking.email": "邮箱", "booking.send": "发送预约请求",
+    "booking.sending": "正在发送您的请求...", "booking.sentWaiting": "已送达，正在等待诊所回复...",
+    "booking.assistantChecking": "医生助理正在核实时间...", "booking.toClinic": "诊所",
+    "booking.confirmed": "已确认", "booking.adjusted": "已调整至诊所营业时间内（9点至17点）。",
+    "booking.bookAnother": "再次预约",
+    "step.sent": "已发送", "step.reviewing": "审核中", "step.confirmed": "已确认",
+    "home.title": "术后恢复支持", "home.subtitle": "与您的医生保持联系，安心恢复。",
+    "home.confidence": "安心恢复", "home.trackBtn": "追踪我的恢复", "home.bookBtn": "预约就诊",
+    "home.betterInfo": "更好的照护，更顺利的恢复。",
+    "journey.track": "记录症状", "journey.upload": "上传更新", "journey.ai": "AI分析",
+    "journey.share": "分享给医生", "journey.review": "医生审核",
+    "wf1.title": "追踪恢复情况", "wf1.body": "每天记录疼痛、肿胀与睡眠。",
+    "wf2.title": "上传更新", "wf2.body": "照片、文件与简短备注。",
+    "wf3.title": "AI分析", "wf3.body": "与您的恢复历史进行对比。",
+    "wf4.title": "通过邮件分享", "wf4.body": "一条安全链接直达诊所。",
+    "wf5.title": "医生审核", "wf5.body": "照片、症状与AI摘要。",
+    "wf6.title": "获得指导", "wf6.body": "应用内的个性化反馈。",
+    "wf7.title": "持续跟进", "wf7.body": "提醒帮您保持进度。",
+    "pipe1.title": "输入", "pipe1.sub": "数据与照片", "pipe2.title": "AI审核", "pipe2.sub": "历史与症状",
+    "pipe3.title": "生成摘要", "pipe3.sub": "清晰报告", "pipe4.title": "邮件链接", "pipe4.sub": "发送给医生",
+    "pipe5.title": "医生审核", "pipe5.sub": "反馈", "pipe6.title": "持续支持", "pipe6.sub": "持续跟踪",
+    "benefit1": "个性化提醒", "benefit2": "及早发现问题", "benefit3": "安全分享给医生", "benefit4": "更安心",
+    "surgeryType.facelift": "面部提升", "surgeryType.rhinoplasty": "隆鼻",
+    "surgeryType.doubleEyelid": "双眼皮", "surgeryType.vline": "V脸",
+  },
+  th: {
+    "nav.home": "หน้าแรก", "nav.tracker": "ติดตามอาการ", "nav.booking": "นัดหมาย", "nav.language": "ภาษา",
+    "account.intro": "เข้าสู่ระบบหรือสร้างบัญชีด้วยอีเมลของคุณเพื่อบันทึกประวัติ",
+    "account.storageOffline": "ระบบจัดเก็บข้อมูลออฟไลน์ ระบบจะดำเนินการต่อในโหมดผู้เยี่ยมชมสำหรับเซสชันนี้",
+    "account.name": "ชื่อของคุณ", "account.email": "อีเมล", "account.surgeryDate": "วันที่ผ่าตัด",
+    "account.clinic": "คลินิก", "account.clinicPlaceholder": "เลือกคลินิกของคุณ",
+    "account.surgeryType": "ประเภทการผ่าตัด", "account.surgeryTypePlaceholder": "เลือกประเภทการผ่าตัด",
+    "account.doctorName": "ชื่อแพทย์", "account.continue": "ดำเนินการต่อ", "account.checking": "กำลังตรวจสอบ...",
+    "account.welcomeBack": "ยินดีต้อนรับกลับมา {name}", "account.welcomeBackGeneric": "ยินดีต้อนรับกลับมา",
+    "account.errorName": "กรุณากรอกชื่อ", "account.errorEmail": "กรุณากรอกอีเมล",
+    "account.errorSurgeryDate": "กรุณากรอกวันที่ผ่าตัด", "account.errorClinic": "กรุณาเลือกคลินิก",
+    "account.errorSurgeryType": "กรุณาเลือกประเภทการผ่าตัด",
+    "onboarding.text": "แบบสอบถามประจำวันใช้เวลาประมาณหนึ่งนาที ตรวจสอบโดย AI และดูแลโดยทีมแพทย์ของคุณ นี่ไม่ใช่การวินิจฉัย",
+    "onboarding.consent": "ฉันยินยอมให้นำข้อมูลการติดตามอาการของฉันไปใช้ในลักษณะนี้", "onboarding.begin": "เริ่มบันทึกอาการ",
+    "checkin.dayTitle": "บันทึกอาการวันที่ {day}", "checkin.pain": "อาการปวด", "checkin.swelling": "อาการบวม",
+    "checkin.congestion": "อาการคัดจมูก", "checkin.sleep": "คุณภาพการนอน", "checkin.notes": "มีอะไรเพิ่มเติมไหม",
+    "checkin.notesPlaceholder": "ไม่บังคับ", "checkin.addPhoto": "เพิ่มรูปภาพ (ไม่บังคับ)", "checkin.remove": "ลบ",
+    "checkin.send": "ส่งข้อมูล",
+    "symptom.none": "ไม่มี", "symptom.mild": "เล็กน้อย", "symptom.moderate": "ปานกลาง", "symptom.severe": "รุนแรง",
+    "pipeline.validating": "กำลังตรวจสอบข้อมูล", "pipeline.history": "กำลังตรวจสอบประวัติ",
+    "pipeline.analyzingPhoto": "กำลังวิเคราะห์รูปภาพ", "pipeline.checkingPhoto": "กำลังตรวจสอบรูปภาพ",
+    "pipeline.assessing": "กำลังประเมินการฟื้นตัว", "pipeline.notifying": "กำลังแจ้งทีมแพทย์",
+    "pipeline.saving": "กำลังบันทึกข้อมูล", "pipeline.scheduling": "กำลังตั้งเวลาแจ้งเตือน",
+    "loading.default": "กำลังตรวจสอบข้อมูลของคุณ...",
+    "error.text": "ไม่สามารถส่งข้อมูลได้ ข้อมูลถูกบันทึกไว้ในอุปกรณ์นี้แล้ว กรุณาลองใหม่ หรือติดต่อคลินิกหากเป็นเรื่องเร่งด่วน",
+    "error.retry": "ลองอีกครั้ง",
+    "status.normal": "ปกติ", "status.monitor": "ต้องเฝ้าระวัง", "status.urgent": "เร่งด่วน",
+    "triage.urgentRedFlag": "กรุณาติดต่อคลินิกของคุณทันที",
+    "triage.urgentPattern": "อาการวันที่ {day} ผิดปกติจากที่คาดไว้มาก กรุณาติดต่อคลินิกของคุณ",
+    "triage.monitor": "อาการวันที่ {day} ผิดปกติเล็กน้อย ทางคลินิกจะตรวจสอบเพิ่มเติม",
+    "triage.normal": "อาการวันที่ {day} ปกติดี เราจะติดตามอีกครั้งพรุ่งนี้",
+    "visual.failed": "ไม่สามารถวิเคราะห์รูปภาพโดยอัตโนมัติได้ รูปถูกบันทึกไว้ให้คลินิกตรวจสอบ",
+    "visual.urgent": "รูปภาพแสดงลักษณะที่สอดคล้องกับอาการที่คุณระบุ",
+    "visual.monitor": "รูปภาพแสดงอาการบวมมากกว่าที่คาดไว้เล็กน้อย",
+    "visual.normal": "ไม่พบสิ่งผิดปกติในรูปภาพ",
+    "result.trend": "มีการเปลี่ยนแปลงมากกว่าปกติเมื่อเทียบกับเมื่อวาน",
+    "result.photoTip": "การแนบรูปภาพครั้งหน้าจะช่วยให้คลินิกเข้าใจอาการได้ดีขึ้น",
+    "result.contactClinic": "ติดต่อคลินิกตอนนี้", "result.bookAppointment": "นัดหมายแพทย์",
+    "result.optional": "(ไม่บังคับ)", "result.reminderTo": "การแจ้งเตือนครั้งถัดไปจะส่งไปที่ {email}",
+    "result.statusAuto": "ส่งข้อมูลโดยอัตโนมัติแล้ว", "result.statusReviewed": "ตรวจสอบโดยคลินิกแล้ว",
+    "result.statusFailed": "บันทึกข้อมูลแล้ว กำลังพยายามส่งให้คลินิก", "result.statusPending": "คลินิกของคุณกำลังตรวจสอบข้อมูลนี้",
+    "result.disclaimer": "นี่ไม่ใช่การวินิจฉัย หากรู้สึกว่าเป็นเรื่องฉุกเฉิน กรุณาติดต่อคลินิกโดยตรง",
+    "result.helpful": "เป็นประโยชน์ไหม", "result.logAnother": "บันทึกอีกวัน",
+    "contact.title": "Contact your clinic",
+    "contact.subtitle": "Prepare a simple email using the symptoms from your latest check-in.",
+    "contact.step1": "1. Select clinic",
+    "contact.step2": "2. Confirm your email",
+    "contact.step3": "3. Review and send",
+    "contact.clinic": "Clinic",
+    "contact.clinicPlaceholder": "Select your clinic",
+    "contact.clinicEmail": "Clinic email",
+    "contact.patientEmail": "Your email",
+    "contact.emailPlaceholder": "Enter your email",
+    "contact.emailNote": "This is the email address the clinic can use to reply to you.",
+    "contact.subject": "Subject",
+    "contact.message": "Email message",
+    "contact.send": "Open email and send",
+    "contact.back": "Back to recovery result",
+    "contact.emailAppNote": "Your email app will open with the clinic address, subject and message already filled in. You can review it once more before sending.",
+    "contact.opened": "Your email app should be opening now. If it did not open, copy the message and send it from your email app.",
+    "contact.copy": "Copy email details",
+    "contact.copied": "Copied",
+    "contact.noClinicEmail": "No email is available for this clinic.",
+    "contact.requiredEmail": "Please enter a valid email address.",
+    "contact.symptomsHeading": "Symptoms from your check-in",
+    "contact.photoNote": "A photo was added to this check-in. It is not attached to this email; the clinic can ask you for it if needed.",
+    "history.empty": "ยังไม่มีข้อมูลบันทึก ครั้งแรกใช้เวลาประมาณหนึ่งนาที", "history.start": "เริ่มบันทึกของวันนี้",
+    "history.painTrend": "แนวโน้มอาการปวด", "history.dayLabel": "วันที่ {day}",
+    "settings.guest": "ผู้เยี่ยมชม",
+    "settings.bullet1": "AI ให้คำแนะนำเบื้องต้นเท่านั้น ไม่วินิจฉัยโรค คลินิกของคุณจะตรวจสอบทุกกรณีที่ถูกทำเครื่องหมาย",
+    "settings.bullet2": "ข้อมูลจะถูกเก็บไว้ตลอดช่วงพักฟื้นบวกอีก 90 วัน จากนั้นจะถูกลบ",
+    "settings.deleteHistory": "ลบประวัติ", "settings.cleared": "ลบประวัติแล้ว", "settings.signOut": "ออกจากระบบ",
+    "tracker.title": "ติดตามการฟื้นตัว", "tracker.testingTools": "เครื่องมือทดสอบ",
+    "tracker.simTotal": "จำลองความล้มเหลวทั้งหมด", "tracker.simPhoto": "จำลองการวิเคราะห์รูปภาพล้มเหลว",
+    "tracker.simNotify": "จำลองการแจ้งเตือนล้มเหลว", "tracker.dayOf": "วันที่ {day} จากประมาณ 6 สัปดาห์",
+    "tab.checkin": "บันทึกอาการ", "tab.history": "ประวัติ", "tab.settings": "ตั้งค่า",
+    "booking.title": "นัดหมายแพทย์",
+    "booking.subtitle": "ไม่จำเป็นต้องมีอาการผิดปกติ การตรวจติดตามตามปกติก็นัดได้เช่นกัน",
+    "booking.reason": "เหตุผลในการนัด", "booking.reasonRoutine": "การตรวจติดตามตามปกติ",
+    "booking.reasonConcern": "มีอาการที่กังวล", "booking.reasonOther": "อื่นๆ",
+    "booking.date": "วันที่", "booking.time": "เวลา", "booking.notes": "หมายเหตุ (ไม่บังคับ)",
+    "booking.email": "อีเมล", "booking.send": "ส่งคำขอนัดหมาย", "booking.sending": "กำลังส่งคำขอของคุณ...",
+    "booking.sentWaiting": "ส่งคำขอแล้ว กำลังรอการตอบกลับจากคลินิก...",
+    "booking.assistantChecking": "ผู้ช่วยแพทย์กำลังตรวจสอบเวลาว่าง...", "booking.toClinic": "คลินิก",
+    "booking.confirmed": "ยืนยันแล้ว", "booking.adjusted": "ปรับเวลาให้อยู่ในช่วงเวลาทำการของคลินิก (9 โมงถึง 17 โมง)",
+    "booking.bookAnother": "นัดหมายอีกครั้ง",
+    "step.sent": "ส่งแล้ว", "step.reviewing": "กำลังตรวจสอบ", "step.confirmed": "ยืนยันแล้ว",
+    "home.title": "การดูแลหลังผ่าตัด", "home.subtitle": "เชื่อมต่อกับแพทย์ของคุณอยู่เสมอ ฟื้นตัวอย่างมั่นใจ",
+    "home.confidence": "ฟื้นตัวอย่างมั่นใจ", "home.trackBtn": "ติดตามการฟื้นตัวของฉัน", "home.bookBtn": "นัดหมายแพทย์",
+    "home.betterInfo": "การดูแลที่ดีกว่า การฟื้นตัวที่ราบรื่นกว่า",
+    "journey.track": "บันทึกอาการ", "journey.upload": "อัปโหลดข้อมูล", "journey.ai": "AI วิเคราะห์",
+    "journey.share": "ส่งให้แพทย์", "journey.review": "แพทย์ตรวจสอบ",
+    "wf1.title": "ติดตามการฟื้นตัว", "wf1.body": "บันทึกอาการปวด บวม และการนอนทุกวัน",
+    "wf2.title": "อัปโหลดข้อมูล", "wf2.body": "รูปภาพ เอกสาร และบันทึกสั้นๆ",
+    "wf3.title": "AI วิเคราะห์", "wf3.body": "เปรียบเทียบกับประวัติการฟื้นตัวของคุณ",
+    "wf4.title": "ส่งให้แพทย์ทางอีเมล", "wf4.body": "ลิงก์ที่ปลอดภัยไปยังคลินิกของคุณ",
+    "wf5.title": "แพทย์ตรวจสอบ", "wf5.body": "รูปภาพ อาการ และสรุปจาก AI",
+    "wf6.title": "รับคำแนะนำ", "wf6.body": "ข้อเสนอแนะเฉพาะบุคคลในแอป",
+    "wf7.title": "ทำต่อเนื่อง", "wf7.body": "การแจ้งเตือนช่วยให้คุณไม่พลาด",
+    "pipe1.title": "ข้อมูลนำเข้า", "pipe1.sub": "ข้อมูลและรูปภาพ", "pipe2.title": "AI ตรวจสอบ",
+    "pipe2.sub": "ประวัติและอาการ", "pipe3.title": "สรุปผล", "pipe3.sub": "รายงานที่ชัดเจน",
+    "pipe4.title": "ลิงก์อีเมล", "pipe4.sub": "ส่งถึงแพทย์", "pipe5.title": "การตรวจสอบ", "pipe5.sub": "ความคิดเห็น",
+    "pipe6.title": "การสนับสนุน", "pipe6.sub": "ติดตามต่อเนื่อง",
+    "benefit1": "การแจ้งเตือนเฉพาะบุคคล", "benefit2": "ตรวจพบความผิดปกติได้เร็ว",
+    "benefit3": "แชร์ข้อมูลกับแพทย์อย่างปลอดภัย", "benefit4": "อุ่นใจมากขึ้น",
+    "surgeryType.facelift": "ยกกระชับใบหน้า", "surgeryType.rhinoplasty": "เสริมจมูก",
+    "surgeryType.doubleEyelid": "ทำตาสองชั้น", "surgeryType.vline": "วีไลน์",
+  },
+};
+
+function translate(lang, key, vars) {
+  const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  let str = dict[key] !== undefined ? dict[key] : TRANSLATIONS.en[key] !== undefined ? TRANSLATIONS.en[key] : key;
+  if (vars) {
+    Object.keys(vars).forEach((k) => {
+      str = str.split("{" + k + "}").join(vars[k]);
+    });
+  }
+  return str;
+}
+
+/* ============================== account storage ============================== */
+
+const STORAGE_AVAILABLE = typeof window !== "undefined" && !!window.storage && typeof window.storage.get === "function";
+
+async function loadAccount(email) {
+  if (!STORAGE_AVAILABLE) return null;
+  try {
+    const res = await window.storage.get("recoverlink-account:" + email, false);
+    return res && res.value ? JSON.parse(res.value) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function saveAccount(email, data) {
+  if (!STORAGE_AVAILABLE) return false;
+  try {
+    const res = await window.storage.set("recoverlink-account:" + email, JSON.stringify(data), false);
+    return Boolean(res);
+  } catch (e) {
+    return false;
+  }
+}
+
+async function loadLanguagePref() {
+  if (!STORAGE_AVAILABLE) return null;
+  try {
+    const res = await window.storage.get("recoverlink-language-pref", false);
+    return res && res.value ? res.value : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function saveLanguagePref(code) {
+  if (!STORAGE_AVAILABLE) return;
+  try {
+    await window.storage.set("recoverlink-language-pref", code, false);
+  } catch (e) {
+    /* ignore, not critical */
+  }
+}
+
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  const start = new Date(dateStr);
+  if (isNaN(start.getTime())) return null;
+  const now = new Date();
+  const diff = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  return diff >= 0 ? diff + 1 : null;
+}
+
+/* ============================== tracker logic ============================== */
+
+const SYMPTOM_LEVELS = ["none", "mild", "moderate", "severe"];
+const LEVEL_SCORE = { none: 0, mild: 1, moderate: 2, severe: 3 };
+const SEVERITY_ORDER = ["Normal", "Monitor", "Urgent"];
+
+/* ============================== surgery-specific check-in fields ============================== */
+
+// Which extra symptom fields apply to which surgery type. Bruising and mood apply to everyone.
+const SURGERY_EXTRA_FIELDS = {
+  facelift: ["tightness", "numbness"],
+  rhinoplasty: ["numbness", "breathing"],
+  doubleEyelid: ["tightness", "eyeDryness"],
+  vline: ["numbness", "chewing"],
+};
+
+const SURGERIES_WITH_NUMBNESS = ["facelift", "rhinoplasty", "vline"];
+
+const CHEWING_LEVELS = ["normal", "soft", "liquid", "painful"];
+const CHEWING_LABEL_KEY = { normal: "chewing.normal", soft: "chewing.soft", liquid: "chewing.liquid", painful: "chewing.painful" };
+
+const MOOD_OPTIONS = [
+  { value: "cry", emoji: "😭" },
+  { value: "neutral", emoji: "😐" },
+  { value: "happy", emoji: "🙂" },
+  { value: "great", emoji: "🤩" },
+];
+
+const BODY_MAP_REGIONS = [
+  { key: "forehead", cx: 60, cy: 22, r: 9 },
+  { key: "temple", cx: 30, cy: 38, r: 8 },
+  { key: "cheek", cx: 40, cy: 62, r: 9 },
+  { key: "nose", cx: 60, cy: 58, r: 7 },
+  { key: "jaw", cx: 42, cy: 88, r: 8 },
+  { key: "chin", cx: 60, cy: 100, r: 7 },
+];
+
+// Quick-tap tags for the "anything else" field, tailored per surgery.
+const SURGERY_TAGS = {
+  facelift: ["tag.facelift.0", "tag.facelift.1", "tag.facelift.2"],
+  rhinoplasty: ["tag.rhinoplasty.0", "tag.rhinoplasty.1", "tag.rhinoplasty.2"],
+  doubleEyelid: ["tag.doubleEyelid.0", "tag.doubleEyelid.1", "tag.doubleEyelid.2"],
+  vline: ["tag.vline.0", "tag.vline.1", "tag.vline.2"],
+};
+
+const EDUCATION_TIP_COUNT = 8;
+
+const RED_FLAGS = [
+  "fever", "chills",
+  "heavy bleeding", "bleeding won't stop", "bleeding wont stop", "uncontrolled bleeding",
+  "severe pain", "worse pain", "worsening pain", "increasing pain", "unbearable pain",
+  "pus", "foul smell", "foul-smelling", "green discharge", "yellow discharge",
+  "red streak", "spreading redness", "spreading red",
+  "can't breathe", "cant breathe", "difficulty breathing", "trouble breathing",
+  "vision", "chest pain",
+];
+
+const INJECTION_PHRASES = [
+  "ignore previous instructions", "ignore your instructions", "ignore the instructions",
+  "mark this as normal", "mark as normal", "don't notify", "do not notify", "dont notify",
+  "skip the clinic", "don't tell the clinic", "do not tell the clinic",
+];
+
+function classifyCheckin({ day, pain, swelling, congestion, sleep, freeText, lang }) {
+  const text = (freeText || "").toLowerCase();
+  const redFlagHit = RED_FLAGS.find((p) => text.includes(p));
+  const injectionHit = INJECTION_PHRASES.find((p) => text.includes(p));
+
+  if (redFlagHit || injectionHit) {
+    return {
+      classification: "Urgent",
+      redFlagTriggered: true,
+      injectionDetected: Boolean(injectionHit),
+      patientSummary: translate(lang, "triage.urgentRedFlag"),
+      clinicianNote: injectionHit
+        ? "Free text tried to steer the classification (\"" + injectionHit + "\"). Treated as a red flag: review manually."
+        : "Red-flag phrase detected in free text (\"" + redFlagHit + "\"). Escalated regardless of numeric scores.",
+    };
+  }
+
+  const expectedPainMax = day <= 3 ? 8 : day <= 7 ? 6 : day <= 14 ? 4 : day <= 28 ? 3 : 2;
+  const expectedSwellingMax = day <= 7 ? 3 : day <= 14 ? 2 : day <= 28 ? 1 : 0;
+  const swellingScore = LEVEL_SCORE[swelling] ?? 0;
+  const congestionScore = LEVEL_SCORE[congestion] ?? 0;
+  const painOver = pain - expectedPainMax;
+  const swellingOver = swellingScore - expectedSwellingMax;
+
+  if (painOver >= 3 || swellingOver >= 2) {
+    return {
+      classification: "Urgent",
+      redFlagTriggered: false,
+      injectionDetected: false,
+      patientSummary: translate(lang, "triage.urgentPattern", { day: day }),
+      clinicianNote: "Pain " + pain + "/10 (expected up to " + expectedPainMax + ") and/or swelling \"" + swelling + "\" clearly exceed the day-" + day + " pattern.",
+    };
+  }
+  if (painOver >= 1 || swellingOver >= 1 || congestionScore >= 3 || sleep <= 2) {
+    return {
+      classification: "Monitor",
+      redFlagTriggered: false,
+      injectionDetected: false,
+      patientSummary: translate(lang, "triage.monitor", { day: day }),
+      clinicianNote: "Mild deviation from the day-" + day + " pattern (pain " + pain + "/10, swelling \"" + swelling + "\", congestion \"" + congestion + "\", sleep " + sleep + "/10). Add to next review batch.",
+    };
+  }
+  return {
+    classification: "Normal",
+    redFlagTriggered: false,
+    injectionDetected: false,
+    patientSummary: translate(lang, "triage.normal", { day: day }),
+    clinicianNote: "Within the expected day-" + day + " pattern. No action needed.",
+  };
+}
+
+function escalate(level) {
+  const i = SEVERITY_ORDER.indexOf(level);
+  return SEVERITY_ORDER[Math.min(i + 1, SEVERITY_ORDER.length - 1)];
+}
+
+function visualAnalysisNote(classification, visionFailed, lang) {
+  if (visionFailed) return { note: translate(lang, "visual.failed"), failed: true };
+  if (classification === "Urgent") return { note: translate(lang, "visual.urgent"), failed: false };
+  if (classification === "Monitor") return { note: translate(lang, "visual.monitor"), failed: false };
+  return { note: translate(lang, "visual.normal"), failed: false };
+}
+
+function runTriage({ form, previousCheckin, visionFailed, lang }) {
+  const base = classifyCheckin({ ...form, lang });
+  let classification = base.classification;
+  let patientSummary = base.patientSummary;
+  let clinicianNote = base.clinicianNote;
+  let trendEscalated = false;
+
+  if (previousCheckin && !base.redFlagTriggered) {
+    const painJump = form.pain - previousCheckin.pain;
+    const swellingJump = (LEVEL_SCORE[form.swelling] ?? 0) - (LEVEL_SCORE[previousCheckin.swelling] ?? 0);
+    if ((painJump >= 3 || swellingJump >= 2) && classification !== "Urgent") {
+      classification = escalate(classification);
+      trendEscalated = true;
+      clinicianNote = clinicianNote + " Trend flag: pain moved " + previousCheckin.pain + "->" + form.pain + ", swelling " + previousCheckin.swelling + "->" + form.swelling + " since the last check-in.";
+    }
+  }
+
+  let visualNote = null;
+  let visionFailedFlag = false;
+  if (form.photo) {
+    const v = visualAnalysisNote(classification, visionFailed, lang);
+    visualNote = v.note;
+    visionFailedFlag = v.failed;
+  }
+
+  return {
+    ...base,
+    classification,
+    patientSummary,
+    clinicianNote,
+    trendEscalated,
+    visualNote,
+    visionFailed: visionFailedFlag,
+    noPhotoTip: !form.photo,
+  };
+}
+
+const STATUS_STYLE = {
+  Normal: { color: "var(--teal)", bg: "var(--teal-bg)", Icon: CheckCircle2 },
+  Monitor: { color: "var(--clay)", bg: "var(--clay-bg)", Icon: Clock },
+  Urgent: { color: "var(--coral)", bg: "var(--coral-bg)", Icon: AlertTriangle },
+};
+
+function painColor(v) {
+  if (v <= 3) return "var(--teal)";
+  if (v <= 6) return "var(--clay)";
+  return "var(--coral)";
+}
+function sleepColor(v) {
+  if (v >= 7) return "var(--teal)";
+  if (v >= 4) return "var(--clay)";
+  return "var(--coral)";
+}
+
+function StatusBadge({ classification, t }) {
+  const s = STATUS_STYLE[classification] || STATUS_STYLE.Normal;
+  const Icon = s.Icon;
+  const label = t ? t("status." + classification.toLowerCase()) : classification;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" style={{ color: s.color, background: s.bg }}>
+      <Icon size={13} strokeWidth={2.3} />
+      {label}
+    </span>
+  );
+}
+
+function Segmented({ value, onChange, options }) {
+  return (
+    <div className="grid grid-cols-4 gap-1.5">
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button key={opt.value} type="button" onClick={() => onChange(opt.value)} className={"seg-btn rounded-lg border py-2 text-xs font-medium capitalize " + (active ? "seg-active" : "seg-inactive")}>
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function YesNoToggle({ value, onChange, t }) {
+  return (
+    <div className="grid grid-cols-2 gap-1.5">
+      {[
+        { v: true, label: t("yesno.yes") },
+        { v: false, label: t("yesno.no") },
+      ].map((opt) => {
+        const active = value === opt.v;
+        return (
+          <button
+            key={String(opt.v)}
+            type="button"
+            onClick={() => onChange(opt.v)}
+            className={"seg-btn rounded-lg border py-2 text-xs font-medium " + (active ? "seg-active" : "seg-inactive")}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MoodPicker({ value, onChange, t }) {
+  return (
+    <div className="grid grid-cols-4 gap-1.5">
+      {MOOD_OPTIONS.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            aria-label={t("mood." + opt.value)}
+            className={"seg-btn rounded-lg border py-1.5 text-xl flex items-center justify-center " + (active ? "seg-active" : "seg-inactive")}
+            style={active ? {} : { filter: "grayscale(15%)" }}
+          >
+            <span style={{ transform: active ? "scale(1.15)" : "scale(1)", transition: "transform .15s ease" }}>{opt.emoji}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function BodyMap({ selected, onToggle, t }) {
+  const isSelected = (key) => selected.includes(key);
+  return (
+    <div className="flex items-center gap-4">
+      <svg viewBox="0 0 120 120" width="92" height="92" className="shrink-0">
+        <ellipse cx="60" cy="60" rx="48" ry="55" fill="var(--mint-bg)" stroke="var(--mist)" strokeWidth="2" />
+        {BODY_MAP_REGIONS.map((r) => (
+          <circle
+            key={r.key}
+            cx={r.cx}
+            cy={r.cy}
+            r={r.r}
+            onClick={() => onToggle(r.key)}
+            style={{ cursor: "pointer", transition: "fill .15s ease" }}
+            fill={isSelected(r.key) ? "var(--coral)" : "#fff"}
+            stroke={isSelected(r.key) ? "var(--coral)" : "var(--mist)"}
+            strokeWidth="1.5"
+            opacity={isSelected(r.key) ? 0.85 : 1}
+          />
+        ))}
+      </svg>
+      <div className="flex flex-wrap gap-1.5">
+        {BODY_MAP_REGIONS.map((r) => (
+          <button
+            key={r.key}
+            type="button"
+            onClick={() => onToggle(r.key)}
+            className={"seg-btn rounded-full border px-2.5 py-1 text-xs " + (isSelected(r.key) ? "seg-active" : "seg-inactive")}
+          >
+            {t("bodymap." + r.key)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TabButton({ label, active, onClick, Icon }) {
+  return (
+    <button onClick={onClick} className={"tab-btn flex flex-col items-center gap-1 py-3 " + (active ? "tab-active" : "tab-inactive")}>
+      <Icon size={16} />
+      {label}
+    </button>
+  );
+}
+
+function AccountGate({ onSubmit, loading, notice, t }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [surgeryDate, setSurgeryDate] = useState("");
+  const [clinic, setClinic] = useState("");
+  const [surgeryType, setSurgeryType] = useState("");
+  const [doctorName, setDoctorName] = useState("");
+  const [errors, setErrors] = useState({});
+
+  function validate() {
+    const e = {};
+    if (!name.trim()) e.name = t("account.errorName");
+    if (!email.trim()) e.email = t("account.errorEmail");
+    if (!surgeryDate) e.surgeryDate = t("account.errorSurgeryDate");
+    if (!clinic) e.clinic = t("account.errorClinic");
+    if (!surgeryType) e.surgeryType = t("account.errorSurgeryType");
+    return e;
+  }
+
+  function handleSubmit(ev) {
+    ev.preventDefault();
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    onSubmit({ name: name.trim(), email: email.trim(), surgeryDate, clinic, surgeryType, doctorName: doctorName.trim() });
+  }
+
+  const errorColor = { color: "var(--coral)" };
+
+  return (
+    <div>
+      <p className="text-sm leading-relaxed mb-4">{t("account.intro")}</p>
+      {notice && (
+        <p className="text-xs rounded-lg p-2 mb-4" style={{ background: "var(--teal-bg)", color: "var(--ink)" }}>
+          {notice}
+        </p>
+      )}
+      {!STORAGE_AVAILABLE && (
+        <p className="text-xs rounded-lg p-2 mb-4" style={{ background: "var(--clay-bg)", color: "var(--ink)" }}>
+          {t("account.storageOffline")}
+        </p>
+      )}
+      <form onSubmit={handleSubmit} className="space-y-3" noValidate>
+        <div>
+          <label className="text-sm block mb-1.5">
+            {t("account.name")} <span style={errorColor}>*</span>
+          </label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-required="true"
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: errors.name ? "var(--coral)" : "var(--mist)" }}
+          />
+          {errors.name && <p className="text-xs mt-1" style={errorColor}>{errors.name}</p>}
+        </div>
+        <div>
+          <label className="text-sm block mb-1.5">
+            {t("account.email")} <span style={errorColor}>*</span>
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            aria-required="true"
+            placeholder="you@example.com"
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: errors.email ? "var(--coral)" : "var(--mist)" }}
+          />
+          {errors.email && <p className="text-xs mt-1" style={errorColor}>{errors.email}</p>}
+        </div>
+        <div>
+          <label className="text-sm block mb-1.5">
+            {t("account.surgeryDate")} <span style={errorColor}>*</span>
+          </label>
+          <input
+            type="date"
+            value={surgeryDate}
+            onChange={(e) => setSurgeryDate(e.target.value)}
+            aria-required="true"
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: errors.surgeryDate ? "var(--coral)" : "var(--mist)" }}
+          />
+          {errors.surgeryDate && <p className="text-xs mt-1" style={errorColor}>{errors.surgeryDate}</p>}
+        </div>
+        <div>
+          <label className="text-sm block mb-1.5">
+            {t("account.clinic")} <span style={errorColor}>*</span>
+          </label>
+          <select
+            value={clinic}
+            onChange={(e) => setClinic(e.target.value)}
+            aria-required="true"
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: errors.clinic ? "var(--coral)" : "var(--mist)" }}
+          >
+            <option value="">{t("account.clinicPlaceholder")}</option>
+            {CLINICS.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          {errors.clinic && <p className="text-xs mt-1" style={errorColor}>{errors.clinic}</p>}
+        </div>
+        <div>
+          <label className="text-sm block mb-1.5">
+            {t("account.surgeryType")} <span style={errorColor}>*</span>
+          </label>
+          <select
+            value={surgeryType}
+            onChange={(e) => setSurgeryType(e.target.value)}
+            aria-required="true"
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: errors.surgeryType ? "var(--coral)" : "var(--mist)" }}
+          >
+            <option value="">{t("account.surgeryTypePlaceholder")}</option>
+            {SURGERY_TYPE_KEYS.map((k) => (
+              <option key={k} value={k}>{t("surgeryType." + k)}</option>
+            ))}
+          </select>
+          {errors.surgeryType && <p className="text-xs mt-1" style={errorColor}>{errors.surgeryType}</p>}
+        </div>
+        <div>
+          <label className="text-sm block mb-1.5">{t("account.doctorName")}</label>
+          <input
+            value={doctorName}
+            onChange={(e) => setDoctorName(e.target.value)}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: "var(--mist)" }}
+          />
+        </div>
+        <button type="submit" disabled={loading} className="btn-dark w-full rounded-xl py-2.5 text-sm font-medium">
+          {loading ? t("account.checking") : t("account.continue")}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function Onboarding({ consented, setConsented, onStart, t }) {
+  return (
+    <div>
+      <p className="text-sm leading-relaxed">{t("onboarding.text")}</p>
+      <label className="flex items-start gap-2 mt-5 text-sm">
+        <input type="checkbox" checked={consented} onChange={(e) => setConsented(e.target.checked)} className="mt-0.5" />
+        <span>{t("onboarding.consent")}</span>
+      </label>
+      <button disabled={!consented} onClick={onStart} className="btn-dark mt-5 w-full rounded-xl py-2.5 text-sm font-medium">
+        {t("onboarding.begin")}
+      </button>
+    </div>
+  );
+}
+
+function CheckinForm({ form, updateForm, onSubmit, t, surgeryType }) {
+  const symptomOptions = SYMPTOM_LEVELS.map((lvl) => ({ value: lvl, label: t("symptom." + lvl) }));
+  const extraFields = SURGERY_EXTRA_FIELDS[surgeryType] || [];
+  const has = (key) => extraFields.includes(key);
+  const tagKeys = SURGERY_TAGS[surgeryType] || [];
+
+  function toggleTag(key) {
+    const label = t(key);
+    const already = (form.tags || []).includes(key);
+    const nextTags = already ? form.tags.filter((k) => k !== key) : [...(form.tags || []), key];
+    let nextText = form.freeText || "";
+    if (already) {
+      nextText = nextText
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s && s !== label)
+        .join(", ");
+    } else {
+      nextText = nextText ? nextText + (nextText.trim().endsWith(",") ? " " : ", ") + label : label;
+    }
+    updateForm({ tags: nextTags, freeText: nextText });
+  }
+
+  function toggleNumbnessLocation(key) {
+    const cur = form.numbnessLocations || [];
+    const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+    updateForm({ numbnessLocations: next });
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-medium">{t("checkin.dayTitle", { day: form.day })}</h2>
+        <div className="flex items-center gap-1">
+          <button onClick={() => updateForm({ day: Math.max(1, form.day - 1) })} className="step-btn w-7 h-7 rounded-full border text-sm" style={{ borderColor: "var(--mist)" }}>
+            −
+          </button>
+          <button onClick={() => updateForm({ day: Math.min(120, form.day + 1) })} className="step-btn w-7 h-7 rounded-full border text-sm" style={{ borderColor: "var(--mist)" }}>
+            +
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div className="flex justify-between text-sm mb-1">
+          <label className="flex items-center gap-1.5">
+            <Activity size={14} style={{ color: "var(--teal)" }} /> {t("checkin.pain")}
+          </label>
+          <span className="font-medium" style={{ color: painColor(form.pain) }}>
+            {form.pain}/10
+          </span>
+        </div>
+        <input type="range" min="0" max="10" value={form.pain} onChange={(e) => updateForm({ pain: Number(e.target.value) })} className="w-full" />
+      </div>
+
+      <div>
+        <label className="text-sm flex items-center gap-1.5 mb-1.5">
+          <Droplet size={14} style={{ color: "var(--teal)" }} /> {t("checkin.swelling")}
+        </label>
+        <Segmented value={form.swelling} onChange={(v) => updateForm({ swelling: v })} options={symptomOptions} />
+      </div>
+
+      <div>
+        <label className="text-sm flex items-center gap-1.5 mb-1.5">
+          <Wind size={14} style={{ color: "var(--teal)" }} /> {t("checkin.congestion")}
+        </label>
+        <Segmented value={form.congestion} onChange={(v) => updateForm({ congestion: v })} options={symptomOptions} />
+      </div>
+
+      <div>
+        <label className="text-sm flex items-center gap-1.5 mb-1.5">
+          <Droplet size={14} style={{ color: "var(--clay)" }} /> {t("checkin.bruising")}
+        </label>
+        <Segmented value={form.bruising} onChange={(v) => updateForm({ bruising: v })} options={symptomOptions} />
+      </div>
+
+      {has("tightness") && (
+        <div>
+          <div className="flex justify-between text-sm mb-1">
+            <label className="flex items-center gap-1.5">
+              <Activity size={14} style={{ color: "var(--purple)" }} /> {t("checkin.tightness")}
+            </label>
+            <span className="font-medium" style={{ color: "var(--purple)" }}>
+              {form.tightness}/10
+            </span>
+          </div>
+          <input type="range" min="0" max="10" value={form.tightness} onChange={(e) => updateForm({ tightness: Number(e.target.value) })} className="w-full" />
+        </div>
+      )}
+
+      {has("numbness") && (
+        <div>
+          <label className="text-sm flex items-center gap-1.5 mb-1.5">
+            <Brain size={14} style={{ color: "var(--purple)" }} /> {t("checkin.numbness")}
+          </label>
+          <Segmented value={form.numbness} onChange={(v) => updateForm({ numbness: v })} options={symptomOptions} />
+          {form.numbness && form.numbness !== "none" && (
+            <div className="mt-2.5">
+              <label className="text-xs opacity-60 block mb-1.5">{t("checkin.numbness.where")}</label>
+              <BodyMap selected={form.numbnessLocations || []} onToggle={toggleNumbnessLocation} t={t} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {has("breathing") && (
+        <div>
+          <div className="flex justify-between text-sm mb-1">
+            <label className="flex items-center gap-1.5">
+              <Wind size={14} style={{ color: "var(--coral)" }} /> {t("checkin.breathing")}
+            </label>
+            <span className="font-medium" style={{ color: painColor(form.breathingDifficulty) }}>
+              {form.breathingDifficulty}/10
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="10"
+            value={form.breathingDifficulty}
+            onChange={(e) => updateForm({ breathingDifficulty: Number(e.target.value) })}
+            className="w-full"
+          />
+        </div>
+      )}
+
+      {has("eyeDryness") && (
+        <div>
+          <label className="text-sm flex items-center gap-1.5 mb-1.5">
+            <Droplet size={14} style={{ color: "var(--clay)" }} /> {t("checkin.eyeDryness")}
+          </label>
+          <YesNoToggle value={form.eyeDryness} onChange={(v) => updateForm({ eyeDryness: v })} t={t} />
+        </div>
+      )}
+
+      {has("chewing") && (
+        <div>
+          <label className="text-sm flex items-center gap-1.5 mb-1.5">
+            <Wind size={14} style={{ color: "var(--clay)" }} /> {t("checkin.chewing")}
+          </label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {CHEWING_LEVELS.map((lvl) => {
+              const active = form.chewingDifficulty === lvl;
+              return (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => updateForm({ chewingDifficulty: lvl })}
+                  className={"seg-btn rounded-lg border py-2 text-xs font-medium " + (active ? "seg-active" : "seg-inactive")}
+                >
+                  {t(CHEWING_LABEL_KEY[lvl])}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="flex justify-between text-sm mb-1">
+          <label className="flex items-center gap-1.5">
+            <Moon size={14} style={{ color: "var(--teal)" }} /> {t("checkin.sleep")}
+          </label>
+          <span className="font-medium" style={{ color: sleepColor(form.sleep) }}>
+            {form.sleep}/10
+          </span>
+        </div>
+        <input type="range" min="0" max="10" value={form.sleep} onChange={(e) => updateForm({ sleep: Number(e.target.value) })} className="w-full" />
+      </div>
+
+      <div>
+        <label className="text-sm flex items-center gap-1.5 mb-1.5">
+          <Heart size={14} style={{ color: "var(--teal)" }} /> {t("checkin.mood")}
+        </label>
+        <MoodPicker value={form.mood} onChange={(v) => updateForm({ mood: v })} t={t} />
+      </div>
+
+      <div>
+        <label className="text-sm block mb-1.5">{t("checkin.notes")}</label>
+        {tagKeys.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {tagKeys.map((key) => {
+              const active = (form.tags || []).includes(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleTag(key)}
+                  className={"seg-btn rounded-full border px-2.5 py-1 text-xs " + (active ? "seg-active" : "seg-inactive")}
+                >
+                  {t(key)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <textarea
+          value={form.freeText}
+          onChange={(e) => updateForm({ freeText: e.target.value })}
+          rows={2}
+          placeholder={t("checkin.notesPlaceholder")}
+          className="w-full rounded-lg border px-3 py-2 text-sm resize-none"
+          style={{ borderColor: "var(--mist)", background: "transparent" }}
+        />
+      </div>
+
+      <div>
+        {form.photo ? (
+          <div className="flex items-center gap-3 rounded-lg border p-2" style={{ borderColor: "var(--mist)" }}>
+            <img src={form.photo.url} alt="Recovery upload preview" className="w-12 h-12 rounded-md object-cover" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs truncate">{form.photo.name}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  URL.revokeObjectURL(form.photo.url);
+                  updateForm({ photo: null });
+                }}
+                className="text-xs underline opacity-70 hover:opacity-100"
+              >
+                {t("checkin.remove")}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className="btn-outline w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm cursor-pointer">
+            <Camera size={15} />
+            {t("checkin.addPhoto")}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                  const url = URL.createObjectURL(file);
+                  updateForm({ photo: { name: file.name, url } });
+                }
+              }}
+            />
+          </label>
+        )}
+      </div>
+
+      <button onClick={onSubmit} className="btn-primary w-full rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2">
+        <Send size={15} /> {t("checkin.send")}
+      </button>
+    </div>
+  );
+}
+
+function PipelineLoader({ steps, activeIndex }) {
+  return (
+    <div className="py-4">
+      <div className="space-y-3">
+        {steps.map((label, i) => {
+          const done = i < activeIndex;
+          const active = i === activeIndex;
+          return (
+            <div key={label + i} className="flex items-center gap-3 text-sm">
+              <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: done ? "var(--teal-bg)" : "transparent" }}>
+                {done ? (
+                  <CheckCircle2 size={16} style={{ color: "var(--teal)" }} />
+                ) : active ? (
+                  <span className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "var(--mist)", borderTopColor: "var(--teal)" }} />
+                ) : (
+                  <span className="w-2 h-2 rounded-full" style={{ background: "var(--mist)" }} />
+                )}
+              </span>
+              <span style={{ opacity: done ? 0.45 : active ? 1 : 0.35, color: "var(--ink)" }}>{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LoadingState({ text }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-sm opacity-70">
+      <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin mb-4" style={{ borderColor: "var(--mist)", borderTopColor: "var(--teal)" }} />
+      {text}
+    </div>
+  );
+}
+
+function ErrorState({ onRetry, t }) {
+  return (
+    <div className="text-center py-8">
+      <AlertCircle size={28} style={{ color: "var(--coral)" }} className="mx-auto mb-3" />
+      <p className="text-sm leading-relaxed">{t("error.text")}</p>
+      <button onClick={onRetry} className="btn-outline mt-4 rounded-lg px-4 py-2 text-sm">
+        {t("error.retry")}
+      </button>
+    </div>
+  );
+}
+
+
+function formatContactSymptoms(checkin, account, t, patientEmail, selectedClinic) {
+  const lines = [];
+  lines.push("Patient: " + (account && account.name ? account.name : "RecoverLink user"));
+  lines.push("Patient email: " + (patientEmail || (account && account.email) || "Not provided"));
+  lines.push("Clinic: " + (selectedClinic || (account && account.clinic) || "Not selected"));
+  lines.push("Surgery: " + ((account && account.surgeryType) ? t("surgeryType." + account.surgeryType) : "Not provided"));
+  lines.push("Surgery date: " + ((account && account.surgeryDate) || "Not provided"));
+  lines.push("Check-in day: Day " + (checkin.day || "-"));
+  lines.push("Recovery status: " + (checkin.classification || "Not assessed"));
+  lines.push("");
+  lines.push("Symptoms:");
+  lines.push("- Pain: " + (checkin.pain ?? "-") + "/10");
+  lines.push("- Swelling: " + (checkin.swelling ? t("symptom." + checkin.swelling) : "-"));
+  lines.push("- Congestion: " + (checkin.congestion ? t("symptom." + checkin.congestion) : "-"));
+  lines.push("- Bruising: " + (checkin.bruising ? t("symptom." + checkin.bruising) : "-"));
+  lines.push("- Sleep quality: " + (checkin.sleep ?? "-") + "/10");
+  lines.push("- Mood: " + (checkin.mood ? t("mood." + checkin.mood) : "-"));
+
+  const surgeryType = account && account.surgeryType;
+  if (surgeryType === "facelift") {
+    lines.push("- Tightness / tension: " + (checkin.tightness ?? "-") + "/10");
+  }
+  if (surgeryType === "doubleEyelid") {
+    lines.push("- Eye dryness / irritation / blurry vision: " + (checkin.eyeDryness ? "Yes" : "No"));
+  }
+  if (surgeryType === "facelift" || surgeryType === "rhinoplasty" || surgeryType === "vline") {
+    lines.push("- Numbness / tingling: " + (checkin.numbness ? t("symptom." + checkin.numbness) : "-"));
+    if (checkin.numbnessLocations && checkin.numbnessLocations.length) {
+      lines.push("- Numbness location(s): " + checkin.numbnessLocations.map((k) => t("bodymap." + k)).join(", "));
+    }
+  }
+  if (surgeryType === "rhinoplasty") {
+    lines.push("- Breathing difficulty: " + (checkin.breathingDifficulty ?? "-") + "/10");
+  }
+  if (surgeryType === "vline") {
+    lines.push("- Chewing difficulty / jaw stiffness: " + (checkin.chewingDifficulty ? t("chewing." + checkin.chewingDifficulty) : "-"));
+  }
+  if (checkin.tags && checkin.tags.length) {
+    lines.push("- Quick tags: " + checkin.tags.map((k) => t(k)).join(", "));
+  }
+  if (checkin.freeText && checkin.freeText.trim()) {
+    lines.push("- Additional notes: " + checkin.freeText.trim());
+  }
+  if (checkin.photo) {
+    lines.push("");
+    lines.push("Photo: A photo was added to this check-in. It is not attached to this email; the clinic can ask for it if needed.");
+  }
+  return lines.join("\n");
+}
+
+function ContactClinicPage({ checkin, account, t, onBack }) {
+  const [clinic, setClinic] = useState((account && account.clinic) || "");
+  const [email, setEmail] = useState((account && account.email) || "");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const formRef = React.useRef(null);
+  const requestIdRef = React.useRef("");
+  const EMAIL_BACKEND_URL = "https://script.google.com/macros/s/AKfycbzFM_gdIjWEV9mPJefRGOynkK5KeL1XRFcw5LuNK-Ps3T8C7oJPWzjLTNYYNSdlzmOv8A/exec";
+
+  const selectedClinicEmail = clinicEmail(clinic);
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const message = formatContactSymptoms(checkin, account, t, email.trim(), clinic);
+  const subject = "RecoverLink recovery update - Day " + (checkin.day || "");
+  const fullBody = "Hello " + (clinic || "Clinic") + ",\n\nI would like to share my post-surgery recovery update and ask you to review my symptoms.\n\n" + message + "\n\nPlease let me know if I should take any further action.\n\nThank you,\n" + (account && account.name ? account.name : "RecoverLink user");
+
+  React.useEffect(() => {
+    function handleBackendMessage(event) {
+      if (!event || !event.data || event.data.source !== "recoverlink-email-backend") return;
+      if (requestIdRef.current && event.data.requestId !== requestIdRef.current) return;
+      setSending(false);
+      if (event.data.ok) {
+        setSent(true);
+        setSendError("");
+      } else {
+        setSent(false);
+        setSendError(event.data.message || "The email could not be sent.");
+      }
+    }
+    window.addEventListener("message", handleBackendMessage);
+    return () => window.removeEventListener("message", handleBackendMessage);
+  }, []);
+
+  function sendEmail() {
+    if (!selectedClinicEmail || !validEmail || sending) return;
+    if (!EMAIL_BACKEND_URL || EMAIL_BACKEND_URL.indexOf("PASTE_YOUR_") === 0) {
+      setSendError("Email sending is not connected yet. Deploy the included Google Apps Script backend and paste its /exec URL into the RecoverLink file.");
+      setSent(false);
+      return;
+    }
+    setSending(true);
+    setSent(false);
+    setSendError("");
+    requestIdRef.current = "rl_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    const form = formRef.current;
+    if (!form) {
+      setSending(false);
+      setSendError("The email form could not be prepared. Please try again.");
+      return;
+    }
+    form.clinic.value = clinic;
+    form.to.value = selectedClinicEmail;
+    form.fromEmail.value = email.trim();
+    form.senderName.value = (account && account.name) ? account.name : "RecoverLink user";
+    form.subject.value = subject;
+    form.message.value = fullBody;
+    form.requestId.value = requestIdRef.current;
+    form.submit();
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-10">
+      <iframe title="RecoverLink email sender" name="recoverlinkEmailFrame" className="hidden" aria-hidden="true"></iframe>
+      <form ref={formRef} action={EMAIL_BACKEND_URL} method="POST" target="recoverlinkEmailFrame" className="hidden" aria-hidden="true">
+        <input name="clinic" />
+        <input name="to" />
+        <input name="fromEmail" />
+        <input name="senderName" />
+        <input name="subject" />
+        <textarea name="message" />
+        <input name="requestId" />
+      </form>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <p className="text-xs uppercase tracking-wider opacity-50 mb-1">RecoverLink</p>
+          <h1 className="text-2xl" style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>{t("contact.title")}</h1>
+          <p className="text-sm opacity-65 mt-1">{t("contact.subtitle")}</p>
+        </div>
+        <button onClick={onBack} className="btn-outline rounded-full px-4 py-2 text-sm">← {t("contact.back")}</button>
+      </div>
+
+      <div className="max-w-xl mx-auto">
+        <div className="surface-card rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+          <div className="flex items-center justify-between gap-2 mb-5">
+            {[t("contact.step1"), t("contact.step2"), t("contact.step3")].map((step, i) => (
+              <React.Fragment key={step}>
+                <div className="flex items-center gap-2 text-xs" style={{ opacity: i === 0 ? 1 : 0.55 }}>
+                  <span className="w-7 h-7 rounded-full flex items-center justify-center font-medium" style={{ background: i === 0 ? "var(--teal)" : "var(--teal-bg)", color: i === 0 ? "#fff" : "var(--ink)" }}>{i + 1}</span>
+                  <span className="hidden sm:inline">{step.replace(/^\d+\. /, "")}</span>
+                </div>
+                {i < 2 && <span className="opacity-30">→</span>}
+              </React.Fragment>
+            ))}
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <label className="text-sm font-medium block mb-1.5">{t("contact.clinic")}</label>
+              <select value={clinic} onChange={(e) => { setClinic(e.target.value); setSent(false); setSendError(""); }} className="w-full rounded-xl border px-3 py-3 text-sm" style={{ borderColor: "var(--mist)", color: "var(--ink)", background: "#fff" }}>
+                <option value="">{t("contact.clinicPlaceholder")}</option>
+                {CLINICS.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </div>
+
+            {clinic && (
+              <div className="rounded-2xl p-4" style={{ background: "var(--teal-bg)" }}>
+                <div className="text-xs opacity-60 mb-1">{t("contact.clinicEmail")}</div>
+                <div className="flex items-center gap-2 text-sm font-medium break-all">
+                  <Mail size={15} style={{ color: "var(--teal)" }} />
+                  {selectedClinicEmail || t("contact.noClinicEmail")}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-sm font-medium block mb-1.5">{t("contact.patientEmail")}</label>
+              <input type="email" value={email} onChange={(e) => { setEmail(e.target.value); setSent(false); setSendError(""); }} placeholder={t("contact.emailPlaceholder")} className="w-full rounded-xl border px-3 py-3 text-sm" style={{ borderColor: validEmail || !email ? "var(--mist)" : "var(--coral)" }} />
+              <p className="text-xs opacity-55 mt-1.5">{t("contact.emailNote")}</p>
+              {email && !validEmail && <p className="text-xs mt-1" style={{ color: "var(--coral)" }}>{t("contact.requiredEmail")}</p>}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium block mb-1.5">{t("contact.subject")}</label>
+              <input value={subject} readOnly className="w-full rounded-xl border px-3 py-3 text-sm opacity-80" style={{ borderColor: "var(--mist)", background: "#f8fbf9" }} />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium">{t("contact.message")}</label>
+                <span className="text-xs opacity-50">{t("contact.symptomsHeading")}</span>
+              </div>
+              <textarea value={fullBody} readOnly rows={18} className="w-full rounded-xl border px-3 py-3 text-xs leading-relaxed resize-y" style={{ borderColor: "var(--mist)", background: "#fbfdfc", color: "var(--ink)" }} />
+              {checkin.photo && <p className="text-xs opacity-55 mt-1.5">{t("contact.photoNote")}</p>}
+            </div>
+
+            <div className="rounded-2xl border p-4 text-xs leading-relaxed" style={{ borderColor: "var(--mist)", background: "#fbfdfc" }}>
+              <div className="flex gap-2">
+                <ShieldCheck size={16} style={{ color: "var(--teal)" }} className="shrink-0" />
+                <span>This sends the recovery update directly to the selected clinic email. The user email is used as the Reply-To address.</span>
+              </div>
+            </div>
+
+            <button onClick={sendEmail} disabled={!selectedClinicEmail || !validEmail || sending} className="btn-coral w-full rounded-xl py-3 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+              <Send size={16} /> {sending ? "Sending..." : "Send email to my clinic"}
+            </button>
+
+            {sent && (
+              <div className="rounded-xl p-4 text-sm leading-relaxed" style={{ background: "var(--teal-bg)", color: "var(--ink)" }}>
+                <div className="font-medium mb-1">Email sent successfully ✓</div>
+                <div className="text-xs opacity-70">Your recovery update was sent to {selectedClinicEmail}.</div>
+              </div>
+            )}
+
+            {sendError && (
+              <div className="rounded-xl p-4 text-sm leading-relaxed" style={{ background: "#fff1ef", color: "var(--ink)" }}>
+                <div className="font-medium mb-1">Email not sent</div>
+                <div className="text-xs opacity-75">{sendError}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultView({ checkin, giveFeedback, onDone, onGoBooking, onGoContact, account, t }) {
+  const s = STATUS_STYLE[checkin.classification];
+  const label = t("status." + checkin.classification.toLowerCase());
+  const statusLine =
+    checkin.status === "auto-sent"
+      ? t("result.statusAuto")
+      : checkin.status === "reviewed"
+      ? t("result.statusReviewed")
+      : checkin.notifyFailed
+      ? t("result.statusFailed")
+      : t("result.statusPending");
+
+  return (
+    <div>
+      <div className="rounded-xl p-4 mb-3 flex items-start gap-3" style={{ background: s.bg }}>
+        <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "#fff" }}>
+          <s.Icon size={18} style={{ color: s.color }} />
+        </span>
+        <div>
+          <p className="text-sm font-medium mb-0.5" style={{ color: s.color }}>
+            {label} · Day {checkin.day}
+          </p>
+          <p className="text-sm leading-snug" style={{ color: "var(--ink)" }}>
+            {checkin.patientSummary}
+          </p>
+        </div>
+      </div>
+
+      {checkin.trendEscalated && (
+        <p className="text-xs opacity-70 flex items-center gap-1.5 mb-1.5">
+          <TrendingUp size={12} style={{ color: "var(--clay)" }} /> {t("result.trend")}
+        </p>
+      )}
+      {checkin.visualNote && (
+        <p className="text-xs opacity-70 flex items-center gap-1.5 mb-1.5">
+          <Camera size={12} className="shrink-0" /> {checkin.visualNote}
+        </p>
+      )}
+      {checkin.noPhotoTip && (
+        <p className="text-xs opacity-50 flex items-center gap-1.5 mb-1.5">
+          <Camera size={12} className="shrink-0" /> {t("result.photoTip")}
+        </p>
+      )}
+
+      <div className="mt-3 space-y-2">
+        {checkin.classification === "Urgent" && <button onClick={() => onGoContact(checkin)} className="btn-coral w-full rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2"><Mail size={15} /> {t("result.contactClinic")}</button>}
+        <button onClick={onGoBooking} className="text-sm flex items-center gap-1.5" style={{ color: "var(--teal)" }}>
+          <CalendarCheck2 size={14} /> {t("result.bookAppointment")}
+          {checkin.classification === "Normal" ? " " + t("result.optional") : ""}
+        </button>
+      </div>
+
+      <p className="text-xs opacity-50 mt-4">
+        {statusLine}
+        {account && account.email ? " · " + t("result.reminderTo", { email: account.email }) : ""}
+      </p>
+      <p className="text-xs opacity-50 leading-relaxed mt-1 border-t pt-3" style={{ borderColor: "var(--mist)" }}>
+        {t("result.disclaimer")}
+      </p>
+
+      <div className="rounded-lg p-3 my-4 flex items-start gap-2.5 text-xs leading-relaxed" style={{ background: "var(--teal-bg)", color: "var(--ink)" }}>
+        <span className="shrink-0" aria-hidden="true">💡</span>
+        <span>
+          <span className="font-medium">{t("tip.title")} </span>
+          {t("tip." + (checkin.day % EDUCATION_TIP_COUNT))}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between text-sm">
+        <span className="opacity-70">{t("result.helpful")}</span>
+        <div className="flex gap-2">
+          <button onClick={() => giveFeedback(checkin.id, "up")} className="hover:opacity-70 transition-opacity" style={{ color: checkin.feedback === "up" ? "var(--teal)" : "var(--ink)" }}>
+            <ThumbsUp size={16} />
+          </button>
+          <button onClick={() => giveFeedback(checkin.id, "down")} className="hover:opacity-70 transition-opacity" style={{ color: checkin.feedback === "down" ? "var(--coral)" : "var(--ink)" }}>
+            <ThumbsDown size={16} />
+          </button>
+        </div>
+      </div>
+
+      <button onClick={onDone} className="btn-outline w-full mt-5 rounded-lg py-2 text-sm">
+        {t("result.logAnother")}
+      </button>
+    </div>
+  );
+}
+
+function TrendChart({ data }) {
+  const w = 300, h = 84, padL = 6, padR = 6, padT = 6, padB = 6;
+  const n = data.length;
+  const xAt = (i) => padL + (n <= 1 ? 0 : (i * (w - padL - padR)) / (n - 1));
+  const yAt = (v) => padT + (h - padT - padB) * (1 - Math.max(0, Math.min(10, v)) / 10);
+  const painPts = data.map((d, i) => xAt(i) + "," + yAt(d.pain)).join(" ");
+  const swellPts = data.map((d, i) => xAt(i) + "," + yAt(d.swelling)).join(" ");
+  return (
+    <svg viewBox={"0 0 " + w + " " + h} width="100%" height="80" preserveAspectRatio="none">
+      {[0, 5, 10].map((v) => (
+        <line key={v} x1={padL} x2={w - padR} y1={yAt(v)} y2={yAt(v)} stroke="var(--mist)" strokeWidth="1" />
+      ))}
+      <polyline points={swellPts} fill="none" stroke="var(--purple)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points={painPts} fill="none" stroke="var(--teal)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {data.map((d, i) => (
+        <circle key={i} cx={xAt(i)} cy={yAt(d.pain)} r="2.5" fill="var(--teal)" />
+      ))}
+    </svg>
+  );
+}
+
+function HistoryView({ checkins, onOpen, onStart, t }) {
+  if (checkins.length === 0) {
+    return (
+      <div className="text-center py-10">
+        <p className="text-sm opacity-70 mb-4">{t("history.empty")}</p>
+        <button onClick={onStart} className="btn-primary rounded-lg px-4 py-2 text-sm">
+          {t("history.start")}
+        </button>
+      </div>
+    );
+  }
+
+  const trendData = [...checkins].reverse().map((c) => ({ day: c.day, pain: c.pain, swelling: ((LEVEL_SCORE[c.swelling] ?? 0) * 10) / 3 }));
+
+  let trendKey = "history.trendSteady";
+  if (trendData.length >= 2) {
+    const half = Math.max(1, Math.floor(trendData.length / 2));
+    const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+    const earlyAvg = avg(trendData.slice(0, half).map((d) => d.pain));
+    const lateAvg = avg(trendData.slice(-half).map((d) => d.pain));
+    const diff = earlyAvg - lateAvg;
+    trendKey = diff > 0.5 ? "history.trendDown" : diff < -0.5 ? "history.trendUp" : "history.trendSteady";
+  }
+
+  return (
+    <div>
+      {trendData.length >= 2 && (
+        <div className="rounded-xl border p-3 mb-4" style={{ borderColor: "var(--mist)" }}>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium opacity-70">{t("history.painTrend")}</p>
+            <div className="flex items-center gap-2.5 text-[10px] opacity-60">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full inline-block" style={{ background: "var(--teal)" }} /> {t("history.painLegend")}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full inline-block" style={{ background: "var(--purple)" }} /> {t("history.swellingTrend")}
+              </span>
+            </div>
+          </div>
+          <TrendChart data={trendData} />
+          <p className="text-xs mt-1.5 flex items-center gap-1.5" style={{ color: trendKey === "history.trendDown" ? "var(--teal)" : trendKey === "history.trendUp" ? "var(--clay)" : "var(--ink)", opacity: trendKey === "history.trendSteady" ? 0.6 : 1 }}>
+            <TrendingUp size={12} style={{ transform: trendKey === "history.trendDown" ? "scaleY(-1)" : "none" }} />
+            {t(trendKey)}
+          </p>
+        </div>
+      )}
+      <div className="space-y-2">
+        {checkins.map((c) => (
+          <button key={c.id} onClick={() => onOpen(c.id)} className="list-row w-full flex items-center justify-between rounded-lg border px-3 py-2.5 text-left text-sm" style={{ borderColor: "var(--mist)" }}>
+            <span className="flex items-center gap-1.5">
+              {t("history.dayLabel", { day: c.day })}
+              {c.photo && <Camera size={12} className="opacity-50" />}
+            </span>
+            <StatusBadge classification={c.classification} t={t} />
+            <ChevronRight size={14} className="opacity-40" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SettingsView({ account, onDeleteHistory, onSignOut, t }) {
+  const [confirmed, setConfirmed] = useState(false);
+  return (
+    <div className="text-sm space-y-4">
+      {account && (
+        <div className="rounded-lg border p-3 flex items-center gap-3" style={{ borderColor: "var(--mist)" }}>
+          <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--teal-bg)" }}>
+            <User size={16} style={{ color: "var(--teal)" }} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate">{account.name || t("account.name")}</p>
+            <p className="text-xs opacity-60 truncate">{account.email}</p>
+            {account.clinic && (
+              <p className="text-xs opacity-50 truncate">
+                {account.clinic}
+                {account.surgeryType ? " · " + t("surgeryType." + account.surgeryType) : ""}
+              </p>
+            )}
+          </div>
+          {account.guest && (
+            <span className="text-xs shrink-0" style={{ color: "var(--clay)" }}>
+              {t("settings.guest")}
+            </span>
+          )}
+        </div>
+      )}
+
+      <ul className="space-y-2.5">
+        <li className="flex items-start gap-2">
+          <ShieldCheck size={15} className="mt-0.5 shrink-0" style={{ color: "var(--teal)" }} />
+          {t("settings.bullet1")}
+        </li>
+        <li className="flex items-start gap-2">
+          <Clock size={15} className="mt-0.5 shrink-0" style={{ color: "var(--teal)" }} />
+          {t("settings.bullet2")}
+        </li>
+      </ul>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {!confirmed ? (
+          <button
+            onClick={() => {
+              setConfirmed(true);
+              onDeleteHistory();
+            }}
+            className="btn-outline rounded-lg px-3 py-1.5 text-xs"
+          >
+            {t("settings.deleteHistory")}
+          </button>
+        ) : (
+          <span className="text-xs opacity-60">{t("settings.cleared")}</span>
+        )}
+        {account && (
+          <button onClick={onSignOut} className="btn-outline rounded-lg px-3 py-1.5 text-xs flex items-center gap-1.5">
+            <LogOut size={13} /> {t("settings.signOut")}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TrackerPage({ account, checkins, onSignIn, accountLoading, accountNotice, onPersistCheckins, onDeleteHistory, onSignOut, onGoBooking, onGoContact, t, lang }) {
+  const [screen, setScreen] = useState("account");
+  const [consented, setConsented] = useState(false);
+  const [simulateError, setSimulateError] = useState(false);
+  const [simulateVisionError, setSimulateVisionError] = useState(false);
+  const [simulateNotifyError, setSimulateNotifyError] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  const [form, setForm] = useState({
+    day: 5, pain: 3, swelling: "mild", congestion: "mild", bruising: "mild", sleep: 6, mood: "neutral",
+    tightness: 3, numbness: "none", numbnessLocations: [], breathingDifficulty: 2, eyeDryness: false,
+    chewingDifficulty: "normal", tags: [], freeText: "", photo: null,
+  });
+  const [activeId, setActiveId] = useState(null);
+  const [pipelineSteps, setPipelineSteps] = useState([]);
+  const [pipelineIndex, setPipelineIndex] = useState(0);
+  const activeCheckin = checkins.find((c) => c.id === activeId) || null;
+
+  useEffect(() => {
+    if (account) {
+      if (account.surgeryDate) {
+        const d = daysSince(account.surgeryDate);
+        if (d) setForm((f) => ({ ...f, day: Math.min(120, d) }));
+      }
+      setScreen((prev) => (prev === "account" ? (account.isNew ? "onboarding" : "checkin") : prev));
+    } else {
+      setScreen("account");
+      setConsented(false);
+    }
+  }, [account]);
+
+  function updateForm(patch) {
+    setForm((f) => ({ ...f, ...patch }));
+  }
+
+  function submitCheckin() {
+    if (simulateError) {
+      setScreen("loading");
+      setPipelineSteps([t("pipeline.validating")]);
+      setPipelineIndex(0);
+      setTimeout(() => setScreen("error"), 900);
+      return;
+    }
+
+    const previousCheckin = checkins[0] || null;
+    const result = runTriage({ form, previousCheckin, visionFailed: simulateVisionError, lang });
+    const needsNotification = result.classification !== "Normal";
+
+    const steps = [
+      t("pipeline.validating"),
+      t("pipeline.history"),
+      form.photo ? t("pipeline.analyzingPhoto") : t("pipeline.checkingPhoto"),
+      t("pipeline.assessing"),
+      ...(needsNotification ? [t("pipeline.notifying")] : []),
+      t("pipeline.saving"),
+      t("pipeline.scheduling"),
+    ];
+
+    setPipelineSteps(steps);
+    setPipelineIndex(0);
+    setScreen("loading");
+
+    let i = 0;
+    const advance = () => {
+      i += 1;
+      setPipelineIndex(i);
+      if (i >= steps.length) {
+        const id = Date.now();
+        const record = {
+          id,
+          ...form,
+          ...result,
+          notifyFailed: needsNotification && simulateNotifyError,
+          status: result.classification === "Normal" ? "auto-sent" : "pending review",
+          feedback: null,
+        };
+        onPersistCheckins([record, ...checkins]);
+        setActiveId(id);
+        setScreen("result");
+      } else {
+        setTimeout(advance, 450);
+      }
+    };
+    setTimeout(advance, 450);
+  }
+
+  function giveFeedback(id, val) {
+    onPersistCheckins(checkins.map((c) => (c.id === id ? { ...c, feedback: val } : c)));
+  }
+
+  const progressPct = Math.min(100, Math.round((form.day / 42) * 100));
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-10">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+        <h1 className="text-2xl" style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>
+          {t("tracker.title")}
+        </h1>
+        {screen !== "account" && (
+          <button onClick={() => setShowTools((v) => !v)} className="flex items-center gap-1.5 text-xs opacity-50 hover:opacity-90 transition-opacity" style={{ color: "var(--ink)" }}>
+            <SlidersHorizontal size={13} />
+            {t("tracker.testingTools")}
+          </button>
+        )}
+      </div>
+
+      {showTools && screen !== "account" && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mb-6 rounded-lg border px-3 py-2 surface-card" style={{ borderColor: "var(--mist)", color: "var(--ink)", background: "#fff" }}>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={simulateError} onChange={(e) => setSimulateError(e.target.checked)} />
+            {t("tracker.simTotal")}
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={simulateVisionError} onChange={(e) => setSimulateVisionError(e.target.checked)} />
+            {t("tracker.simPhoto")}
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={simulateNotifyError} onChange={(e) => setSimulateNotifyError(e.target.checked)} />
+            {t("tracker.simNotify")}
+          </label>
+        </div>
+      )}
+
+      <div className="flex justify-center mt-6">
+        <div className="surface-card w-full max-w-sm rounded-3xl border overflow-hidden" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full" style={{ background: "var(--mist)" }} />
+          </div>
+          {accountNotice && screen !== "account" && (
+            <div className="mx-6 mt-5 rounded-lg px-3 py-2 text-xs" style={{ background: "var(--teal-bg)", color: "var(--ink)" }}>
+              {accountNotice}
+            </div>
+          )}
+
+          {screen !== "onboarding" && screen !== "account" && (
+            <div className="px-6 pt-5">
+              <div className="flex items-center justify-between text-xs mb-1 opacity-60" style={{ color: "var(--ink)" }}>
+                <span>{t("tracker.dayOf", { day: form.day })}</span>
+                <span>{progressPct}%</span>
+              </div>
+              <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--mist)" }}>
+                <div className="h-full rounded-full transition-all duration-300" style={{ width: progressPct + "%", background: "var(--teal)" }} />
+              </div>
+            </div>
+          )}
+
+          <div key={screen} className="px-6 py-6 fade-in" style={{ color: "var(--ink)" }}>
+            {screen === "account" && <AccountGate onSubmit={onSignIn} loading={accountLoading} notice={accountNotice} t={t} />}
+            {screen === "onboarding" && <Onboarding consented={consented} setConsented={setConsented} onStart={() => setScreen("checkin")} t={t} />}
+            {screen === "checkin" && <CheckinForm form={form} updateForm={updateForm} onSubmit={submitCheckin} t={t} surgeryType={account ? account.surgeryType : null} />}
+            {screen === "loading" && <PipelineLoader steps={pipelineSteps} activeIndex={pipelineIndex} />}
+            {screen === "error" && <ErrorState onRetry={() => setScreen("checkin")} t={t} />}
+            {screen === "result" && activeCheckin && (
+              <ResultView checkin={activeCheckin} giveFeedback={giveFeedback} onDone={() => setScreen("checkin")} onGoBooking={onGoBooking} onGoContact={onGoContact} account={account} t={t} />
+            )}
+            {screen === "history" && (
+              <HistoryView
+                checkins={checkins}
+                onOpen={(id) => {
+                  setActiveId(id);
+                  setScreen("result");
+                }}
+                onStart={() => setScreen("checkin")}
+                t={t}
+              />
+            )}
+            {screen === "settings" && <SettingsView account={account} onDeleteHistory={onDeleteHistory} onSignOut={onSignOut} t={t} />}
+          </div>
+
+          {screen !== "onboarding" && screen !== "account" && (
+            <div className="grid grid-cols-3 border-t text-xs" style={{ borderColor: "var(--mist)" }}>
+              <TabButton label={t("tab.checkin")} active={["checkin", "loading", "result", "error"].includes(screen)} onClick={() => setScreen("checkin")} Icon={Send} />
+              <TabButton label={t("tab.history")} active={screen === "history"} onClick={() => setScreen("history")} Icon={HistoryIcon} />
+              <TabButton label={t("tab.settings")} active={screen === "settings"} onClick={() => setScreen("settings")} Icon={SettingsIcon} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================== booking page ============================== */
+
+const TIME_SLOTS = ["08:00", "09:00", "10:30", "13:00", "15:00", "17:30"];
+const REASON_KEYS = ["routine", "concern", "other"];
+const REASON_LABEL_KEY = { routine: "booking.reasonRoutine", concern: "booking.reasonConcern", other: "booking.reasonOther" };
+
+function resolveSlot(date, time) {
+  const h = Number(time.split(":")[0]);
+  if (h < 9) return { date, time: "09:00", adjusted: true };
+  if (h >= 17) return { date, time: "16:30", adjusted: true };
+  return { date, time, adjusted: false };
+}
+
+function buildBookingEmailParts({ patientEmail, reason, date, time, notes, t }) {
+  const subject = t("booking.mailSubject");
+  const lines = [
+    t("booking.mailBodyIntro"),
+    "",
+    t("booking.mailBodyReason") + ": " + t(REASON_LABEL_KEY[reason]),
+    t("booking.mailBodyDate") + ": " + (date || "-"),
+    t("booking.mailBodyTime") + ": " + time,
+    notes ? t("booking.mailBodyNotes") + ": " + notes : null,
+    "",
+    t("booking.mailBodyFrom") + ": " + (patientEmail || "-"),
+  ].filter((l) => l !== null);
+  return { subject, body: lines.join("\n") };
+}
+
+function buildGmailComposeUrl({ to, subject, body }) {
+  return "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(to) + "&su=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+}
+
+function buildMailtoUrl({ to, subject, body }) {
+  return "mailto:" + to + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+}
+
+function BookingPage({ account, t }) {
+  const [form, setForm] = useState({
+    reason: "routine",
+    date: "",
+    time: "10:30",
+    notes: "",
+    email: account && account.email ? account.email : "",
+  });
+  const [stage, setStage] = useState("form");
+  const [slot, setSlot] = useState(null);
+
+  const clinicEmailAddr = account && account.clinic ? clinicEmail(account.clinic) : "";
+
+  function update(patch) {
+    setForm((f) => ({ ...f, ...patch }));
+  }
+
+  // NOTE ON REAL EMAIL DELIVERY:
+  // Sending a real confirmation email (via SendGrid, Mailgun, Nodemailer, etc.) cannot be
+  // done safely from this client-side file. Any provider API key placed here would be
+  // visible to anyone who views the page source, which is a serious security exposure.
+  // Real email sending belongs in a backend step: either this project's own n8n workflow
+  // (the "Notify Doctor" email node already does this server-side) or a small server
+  // endpoint this app calls. This flow stays a clearly-labeled, timed simulation so the
+  // user experience can still be demoed end to end.
+  //
+  // The clinic email field below is different: it opens the patient's own mail app via
+  // a mailto: link (no keys, no server), pre-addressed to the clinic and pre-filled with
+  // the booking details, so the patient sends the real email themselves.
+  // The clinic email field below is different: it opens Gmail's web compose window via
+  // a URL (view=cm), pre-addressed to the clinic and pre-filled with the booking details,
+  // so the patient sends the real email themselves from their own Gmail account. No keys,
+  // no server. If the popup is blocked, we fall back to a mailto: link so their device's
+  // default mail app opens instead.
+  function submit(e) {
+    e.preventDefault();
+    if (!form.date) return;
+    if (clinicEmailAddr) {
+      const { subject, body } = buildBookingEmailParts({
+        patientEmail: form.email,
+        reason: form.reason,
+        date: form.date,
+        time: form.time,
+        notes: form.notes,
+        t,
+      });
+      const gmailUrl = buildGmailComposeUrl({ to: clinicEmailAddr, subject, body });
+      const win = window.open(gmailUrl, "_blank");
+      if (!win || win.closed || typeof win.closed === "undefined") {
+        window.location.href = buildMailtoUrl({ to: clinicEmailAddr, subject, body });
+      }
+    }
+    setStage("sending");
+    setTimeout(() => {
+      setStage("sent");
+      setTimeout(() => {
+        setStage("booking");
+        setTimeout(() => {
+          setSlot(resolveSlot(form.date, form.time));
+          setStage("confirmed");
+        }, 1300);
+      }, 1100);
+    }, 800);
+  }
+
+  function reset() {
+    setStage("form");
+    setSlot(null);
+  }
+
+  const steps = [
+    { id: "sending", label: t("step.sent") },
+    { id: "booking", label: t("step.reviewing") },
+    { id: "confirmed", label: t("step.confirmed") },
+  ];
+  const order = ["form", "sending", "sent", "booking", "confirmed"];
+  const currentIndex = order.indexOf(stage);
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-10" style={{ color: "var(--ink)" }}>
+      <h1 className="text-2xl mb-1" style={{ fontFamily: "var(--font-display)" }}>
+        {t("booking.title")}
+      </h1>
+      <p className="text-sm opacity-70 mb-6">{t("booking.subtitle")}</p>
+
+      {stage !== "form" && (
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
+          {steps.map((s, i) => {
+            const reached = currentIndex >= order.indexOf(s.id);
+            return (
+              <div key={s.id} className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium transition-colors duration-300" style={reached ? { background: "var(--teal)", color: "#fff" } : { background: "var(--mist)", color: "var(--ink)" }}>
+                  {i + 1}
+                </div>
+                <span className="text-xs opacity-70">{s.label}</span>
+                {i < steps.length - 1 && <div className="w-6 h-px" style={{ background: "var(--mist)" }} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div key={stage} className="fade-in">
+        {stage === "form" && (
+          <form onSubmit={submit} className="surface-card rounded-2xl border p-5 space-y-4" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+            <div>
+              <label className="text-sm block mb-1.5">{t("booking.reason")}</label>
+              <select value={form.reason} onChange={(e) => update({ reason: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--mist)" }}>
+                {REASON_KEYS.map((k) => (
+                  <option key={k} value={k}>
+                    {t(REASON_LABEL_KEY[k])}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm block mb-1.5">{t("booking.date")}</label>
+                <input type="date" required value={form.date} onChange={(e) => update({ date: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--mist)" }} />
+              </div>
+              <div>
+                <label className="text-sm block mb-1.5">{t("booking.time")}</label>
+                <select value={form.time} onChange={(e) => update({ time: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--mist)" }}>
+                  {TIME_SLOTS.map((slotTime) => (
+                    <option key={slotTime} value={slotTime}>
+                      {slotTime}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm block mb-1.5">{t("booking.notes")}</label>
+              <textarea value={form.notes} onChange={(e) => update({ notes: e.target.value })} rows={2} className="w-full rounded-lg border px-3 py-2 text-sm resize-none" style={{ borderColor: "var(--mist)" }} />
+            </div>
+            <div>
+              <label className="text-sm block mb-1.5">{t("booking.email")}</label>
+              <input type="email" required value={form.email} onChange={(e) => update({ email: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--mist)" }} />
+            </div>
+            <div>
+              <label className="text-sm block mb-1.5">{t("booking.clinicEmail")}</label>
+              <input
+                type="text"
+                readOnly
+                value={clinicEmailAddr || t("booking.clinicEmailMissing")}
+                className="w-full rounded-lg border px-3 py-2 text-sm opacity-70"
+                style={{ borderColor: "var(--mist)", background: "var(--mint-bg)" }}
+              />
+              <p className="text-xs opacity-50 mt-1">{t("booking.clinicEmailNote")}</p>
+            </div>
+            <button type="submit" className="btn-primary w-full rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2">
+              <Mail size={15} /> {t("booking.send")}
+            </button>
+          </form>
+        )}
+
+        {stage === "sending" && (
+          <div className="surface-card rounded-2xl border" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+            <LoadingState text={t("booking.sending")} />
+          </div>
+        )}
+
+        {(stage === "sent" || stage === "booking") && (
+          <div className="space-y-4">
+            <div className="surface-card rounded-2xl border p-4" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+              <div className="flex items-center gap-2 mb-1 text-xs opacity-60">
+                <Mail size={13} /> {form.email} → {t("booking.toClinic")}
+              </div>
+              <p className="text-sm font-medium">{t(REASON_LABEL_KEY[form.reason])}</p>
+              <p className="text-xs opacity-70">
+                {form.date} · {form.time}
+              </p>
+            </div>
+            <div className="surface-card rounded-2xl border" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+              <LoadingState text={stage === "sent" ? t("booking.sentWaiting") : t("booking.assistantChecking")} />
+            </div>
+          </div>
+        )}
+
+        {stage === "confirmed" && slot && (
+          <div className="space-y-4">
+            <div className="surface-card rounded-2xl border p-4" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+              <div className="flex items-center gap-2 mb-1 text-xs opacity-60">
+                <Mail size={13} /> {form.email} → {t("booking.toClinic")}
+              </div>
+              <p className="text-sm font-medium">{t(REASON_LABEL_KEY[form.reason])}</p>
+              <p className="text-xs opacity-70">
+                {form.date} · {form.time}
+              </p>
+            </div>
+
+            <div className="surface-card rounded-2xl border p-4" style={{ borderColor: "var(--teal)", background: "var(--teal-bg)" }}>
+              <div className="flex items-center gap-2 mb-1 text-xs opacity-70">
+                <MailCheck size={13} /> {t("booking.toClinic")} → {form.email}
+              </div>
+              <p className="text-sm font-medium mb-1">{t("booking.confirmed")}</p>
+              <p className="text-sm mb-1 flex items-center gap-1">
+                <CalendarCheck2 size={14} style={{ color: "var(--teal)" }} />
+                {slot.date} · {slot.time}
+              </p>
+              {slot.adjusted && <p className="text-xs opacity-70">{t("booking.adjusted")}</p>}
+            </div>
+
+            <button onClick={reset} className="btn-outline rounded-lg px-4 py-2 text-sm">
+              {t("booking.bookAnother")}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================== home / marketing page ============================== */
+
+const JOURNEY_STEPS = [
+  { Icon: ClipboardList, key: "journey.track" },
+  { Icon: ImagePlus, key: "journey.upload" },
+  { Icon: Brain, key: "journey.ai" },
+  { Icon: Mail, key: "journey.share" },
+  { Icon: Stethoscope, key: "journey.review" },
+];
+
+const WORKFLOW_STEPS = [
+  { n: 1, Icon: ClipboardList, titleKey: "wf1.title", bodyKey: "wf1.body" },
+  { n: 2, Icon: ImagePlus, titleKey: "wf2.title", bodyKey: "wf2.body" },
+  { n: 3, Icon: Brain, titleKey: "wf3.title", bodyKey: "wf3.body" },
+  { n: 4, Icon: Mail, titleKey: "wf4.title", bodyKey: "wf4.body" },
+  { n: 5, Icon: Stethoscope, titleKey: "wf5.title", bodyKey: "wf5.body" },
+  { n: 6, Icon: MessageSquareText, titleKey: "wf6.title", bodyKey: "wf6.body" },
+  { n: 7, Icon: RefreshCcw, titleKey: "wf7.title", bodyKey: "wf7.body" },
+];
+
+const AI_PIPELINE = [
+  { Icon: ClipboardList, titleKey: "pipe1.title", subKey: "pipe1.sub" },
+  { Icon: Brain, titleKey: "pipe2.title", subKey: "pipe2.sub" },
+  { Icon: MessageSquareText, titleKey: "pipe3.title", subKey: "pipe3.sub" },
+  { Icon: Mail, titleKey: "pipe4.title", subKey: "pipe4.sub" },
+  { Icon: Stethoscope, titleKey: "pipe5.title", subKey: "pipe5.sub" },
+  { Icon: RefreshCcw, titleKey: "pipe6.title", subKey: "pipe6.sub" },
+];
+
+const BENEFIT_KEYS = [
+  { Icon: RefreshCcw, key: "benefit1" },
+  { Icon: Brain, key: "benefit2" },
+  { Icon: Mail, key: "benefit3" },
+  { Icon: Heart, key: "benefit4" },
+];
+
+function HomePage({ onGoTracker, onGoBooking, t }) {
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-10 relative overflow-hidden" style={{ color: "var(--ink)" }}>
+      <div
+        className="absolute rounded-full pointer-events-none"
+        style={{ width: 260, height: 260, top: -90, left: -90, background: "var(--teal)", opacity: 0.15, filter: "blur(70px)", zIndex: 0 }}
+      />
+      <div
+        className="absolute rounded-full pointer-events-none"
+        style={{ width: 220, height: 220, top: -50, right: 10, background: "var(--coral)", opacity: 0.13, filter: "blur(70px)", zIndex: 0 }}
+      />
+      <div className="relative" style={{ zIndex: 1 }}>
+      <div className="flex flex-wrap items-center justify-between gap-6 mb-10">
+        <div className="max-w-md">
+          <h1 className="text-3xl mb-2" style={{ fontFamily: "var(--font-display)" }}>
+            {t("home.title")}
+          </h1>
+          <p className="opacity-70">{t("home.subtitle")}</p>
+        </div>
+        <div className="text-center">
+          <div className="flex items-center justify-center">
+            <span className="w-12 h-12 rounded-full flex items-center justify-center -mr-3 border-2" style={{ background: "var(--teal-bg)", borderColor: "var(--mint-bg)" }}>
+              <User size={18} style={{ color: "var(--teal)" }} />
+            </span>
+            <span className="w-14 h-14 rounded-full flex items-center justify-center z-10 border-2" style={{ background: "var(--purple)", borderColor: "var(--mint-bg)" }}>
+              <Brain size={20} color="#fff" />
+            </span>
+            <span className="w-12 h-12 rounded-full flex items-center justify-center -ml-3 border-2" style={{ background: "var(--teal-bg)", borderColor: "var(--mint-bg)" }}>
+              <Stethoscope size={18} style={{ color: "var(--teal)" }} />
+            </span>
+          </div>
+          <p className="text-base mt-2 -rotate-2" style={{ fontFamily: "var(--font-hand)", color: "var(--coral)" }}>
+            {t("home.confidence")} ♡
+          </p>
+        </div>
+      </div>
+
+      <div className="surface-card rounded-2xl border p-5 mb-8" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+        <div className="flex flex-wrap items-start justify-center gap-2">
+          {JOURNEY_STEPS.map((s, i) => (
+            <div key={s.key} className="flex items-center gap-2">
+              <div className="flex flex-col items-center w-20 text-center">
+                <span className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: "var(--teal-bg)" }}>
+                  <s.Icon size={17} style={{ color: "var(--teal)" }} />
+                </span>
+                <span className="text-xs leading-tight opacity-70">{t(s.key)}</span>
+              </div>
+              {i < JOURNEY_STEPS.length - 1 && <ChevronRight size={14} className="opacity-30 shrink-0" />}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {WORKFLOW_STEPS.map((s) => (
+          <div key={s.n} className="surface-card card-hover rounded-2xl border p-4 text-center" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+            <span className="w-11 h-11 rounded-full flex items-center justify-center mx-auto mb-2" style={{ background: "var(--purple-bg)" }}>
+              <s.Icon size={19} style={{ color: "var(--purple)" }} />
+            </span>
+            <h3 className="text-sm font-medium mb-0.5">{t(s.titleKey)}</h3>
+            <p className="text-xs opacity-60">{t(s.bodyKey)}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-10">
+        <button onClick={onGoTracker} className="btn-primary rounded-full px-5 py-2.5 text-sm font-medium">
+          {t("home.trackBtn")}
+        </button>
+        <button onClick={onGoBooking} className="btn-teal-outline rounded-full px-5 py-2.5 text-sm font-medium">
+          {t("home.bookBtn")}
+        </button>
+      </div>
+
+      <div className="surface-card rounded-2xl border p-5 mb-8" style={{ borderColor: "var(--mist)", background: "#fff" }}>
+        <div className="flex flex-wrap items-start justify-center gap-2">
+          {AI_PIPELINE.map((s, i) => (
+            <div key={s.titleKey} className="flex items-center gap-2">
+              <div className="flex flex-col items-center w-20 text-center">
+                <span className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: "var(--purple-bg)" }}>
+                  <s.Icon size={17} style={{ color: "var(--purple)" }} />
+                </span>
+                <span className="text-xs font-medium">{t(s.titleKey)}</span>
+                <span className="text-xs opacity-50 leading-tight">{t(s.subKey)}</span>
+              </div>
+              {i < AI_PIPELINE.length - 1 && <ChevronRight size={14} className="opacity-30 shrink-0" />}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
+          {BENEFIT_KEYS.map((b) => (
+            <div key={b.key} className="surface-card rounded-xl p-3 text-center" style={{ background: "var(--teal-bg)" }}>
+              <b.Icon size={19} style={{ color: "var(--teal)" }} className="mx-auto mb-1.5" />
+              <p className="text-xs font-medium leading-tight" style={{ color: "var(--ink)" }}>
+                {t(b.key)}
+              </p>
+            </div>
+          ))}
+        </div>
+        <div className="rounded-2xl p-5 flex items-center justify-center text-center" style={{ background: "var(--coral-bg)" }}>
+          <p className="text-lg" style={{ fontFamily: "var(--font-hand)", color: "var(--coral)" }}>
+            {t("home.betterInfo")}
+          </p>
+        </div>
+      </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================== header + root ============================== */
+
+function Header({ page, setPage, t, lang, onChangeLang }) {
+  const links = [
+    { id: "home", label: t("nav.home") },
+    { id: "tracker", label: t("nav.tracker") },
+    { id: "booking", label: t("nav.booking") },
+  ];
+  return (
+    <header className="border-b sticky top-0 z-10" style={{ borderColor: "var(--mist)", background: "var(--mint-bg)" }}>
+      <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <button onClick={() => setPage("home")} className="flex items-center gap-2">
+          <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #23977a, var(--teal))", boxShadow: "0 2px 8px rgba(30,122,103,0.35)" }}>
+            <Heart size={17} color="#fff" fill="#fff" />
+          </span>
+          <span className="block text-lg leading-none" style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>
+            RecoverLink
+          </span>
+        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <nav className="flex items-center gap-1 flex-wrap">
+            {links.map((l) => (
+              <button key={l.id} onClick={() => setPage(l.id)} className={"nav-btn rounded-full px-3 py-1.5 text-sm " + (page === l.id ? "nav-active" : "nav-inactive")}>
+                {l.label}
+              </button>
+            ))}
+          </nav>
+          <select
+            value={lang}
+            onChange={(e) => onChangeLang(e.target.value)}
+            aria-label={t("nav.language")}
+            className="rounded-full border px-2 py-1.5 text-xs"
+            style={{ borderColor: "var(--mist)", color: "var(--ink)", background: "transparent" }}
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function RecoverLinkSite() {
+  const [page, setPage] = useState("home");
+  const [contactCheckin, setContactCheckin] = useState(null);
+  const [account, setAccount] = useState(null);
+  const [checkins, setCheckins] = useState([]);
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountNotice, setAccountNotice] = useState("");
+  const [lang, setLang] = useState("en");
+
+  useEffect(() => {
+    let mounted = true;
+    loadLanguagePref().then((saved) => {
+      if (mounted && saved) setLang(saved);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  function changeLang(code) {
+    setLang(code);
+    saveLanguagePref(code);
+  }
+
+  const t = (key, vars) => translate(lang, key, vars);
+
+  async function handleSignIn({ name, email, surgeryDate, clinic, surgeryType, doctorName }) {
+    setAccountLoading(true);
+    const normalizedEmail = email.toLowerCase();
+    const existing = await loadAccount(normalizedEmail);
+    if (existing) {
+      setAccount({
+        name: existing.name || name,
+        email: normalizedEmail,
+        surgeryDate: existing.surgeryDate || surgeryDate,
+        clinic: existing.clinic || clinic,
+        surgeryType: existing.surgeryType || surgeryType,
+        doctorName: existing.doctorName || doctorName,
+        guest: !STORAGE_AVAILABLE,
+        isNew: false,
+      });
+      setCheckins(existing.checkins || []);
+      setAccountNotice(existing.name ? t("account.welcomeBack", { name: existing.name }) : t("account.welcomeBackGeneric"));
+    } else {
+      const fresh = { name, email: normalizedEmail, surgeryDate, clinic, surgeryType, doctorName, checkins: [] };
+      const ok = await saveAccount(normalizedEmail, fresh);
+      setAccount({ name, email: normalizedEmail, surgeryDate, clinic, surgeryType, doctorName, guest: !ok, isNew: true });
+      setCheckins([]);
+      setAccountNotice(ok ? "" : t("account.storageOffline"));
+    }
+    setAccountLoading(false);
+  }
+
+  function persistCheckins(nextCheckins) {
+    setCheckins(nextCheckins);
+    if (account && !account.guest) {
+      saveAccount(account.email, {
+        name: account.name,
+        email: account.email,
+        surgeryDate: account.surgeryDate,
+        clinic: account.clinic,
+        surgeryType: account.surgeryType,
+        doctorName: account.doctorName,
+        checkins: nextCheckins,
+      });
+    }
+  }
+
+  function deleteHistory() {
+    setCheckins([]);
+    if (account && !account.guest) {
+      saveAccount(account.email, {
+        name: account.name,
+        email: account.email,
+        surgeryDate: account.surgeryDate,
+        clinic: account.clinic,
+        surgeryType: account.surgeryType,
+        doctorName: account.doctorName,
+        checkins: [],
+      });
+    }
+  }
+
+  function goContact(checkin) {
+    setContactCheckin(checkin);
+    setPage("contact");
+  }
+
+  function signOut() {
+    setContactCheckin(null);
+    setAccount(null);
+    setCheckins([]);
+    setAccountNotice("");
+  }
+
+  return (
+    <div className="page-canvas w-full" style={{ minHeight: "100%" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');
+        :root {
+          --mint-bg: #EAF5F0;
+          --ink: #123B34;
+          --teal: #1E7A67;
+          --teal-bg: linear-gradient(135deg, #EDF8F3, #D3EAE1);
+          --purple: #6D5FD8;
+          --purple-bg: linear-gradient(135deg, #F1EFFC, #E0DBF9);
+          --coral: #E1665C;
+          --coral-bg: linear-gradient(135deg, #FDEDEA, #F8D9D4);
+          --clay: #9C6B2E;
+          --clay-bg: linear-gradient(135deg, #F7EFDF, #EDE0C8);
+          --mist: #D8E6DE;
+          --font-display: 'Fraunces', serif;
+          --font-hand: 'Caveat', cursive;
+        }
+        body { background: var(--mint-bg); color: var(--ink); color-scheme: light; }
+        * { font-family: 'Public Sans', system-ui, sans-serif; }
+        input[type="range"] { accent-color: var(--teal); }
+
+        button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible {
+          outline: 2px solid var(--teal);
+          outline-offset: 2px;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.25s ease; }
+
+        .surface-card { box-shadow: 0 1px 3px rgba(18,59,52,0.05), 0 8px 20px rgba(18,59,52,0.07); }
+
+        .btn-primary { background: linear-gradient(135deg, #23977a, var(--teal)); color: #fff; box-shadow: 0 3px 10px rgba(30,122,103,0.28); transition: filter .15s ease, transform .1s ease, box-shadow .15s ease; }
+        .btn-primary:hover { filter: brightness(1.05); box-shadow: 0 5px 16px rgba(30,122,103,0.34); }
+        .btn-primary:active { transform: scale(0.97); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+        .btn-dark { background: linear-gradient(135deg, #1a332d, var(--ink)); color: #fff; box-shadow: 0 3px 10px rgba(18,59,52,0.25); transition: filter .15s ease, transform .1s ease, box-shadow .15s ease; }
+        .btn-dark:hover { filter: brightness(1.25); }
+        .btn-dark:active { transform: scale(0.97); }
+        .btn-dark:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .btn-coral { background: linear-gradient(135deg, #e8817a, var(--coral)); color: #fff; box-shadow: 0 3px 10px rgba(225,102,92,0.3); transition: filter .15s ease, transform .1s ease, box-shadow .15s ease; }
+        .btn-coral:hover { filter: brightness(1.05); box-shadow: 0 5px 16px rgba(225,102,92,0.36); }
+        .btn-coral:active { transform: scale(0.97); }
+
+        .card-hover { transition: transform .2s ease, box-shadow .2s ease; }
+        .card-hover:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(18,59,52,0.12); }
+
+        .page-canvas { background: radial-gradient(1100px circle at 12% -10%, #ffffff 0%, #eef8f3 30%, var(--mint-bg) 58%, #e2f0e8 100%); }
+
+        .btn-outline { background: transparent; border: 1px solid var(--mist); color: var(--ink); transition: background .15s ease, border-color .15s ease, transform .1s ease; }
+        .btn-outline:hover { background: var(--teal-bg); border-color: var(--teal); }
+        .btn-outline:active { transform: scale(0.97); }
+
+        .btn-teal-outline { background: transparent; border: 1px solid var(--teal); color: var(--teal); transition: background .15s ease, transform .1s ease; }
+        .btn-teal-outline:hover { background: var(--teal-bg); }
+        .btn-teal-outline:active { transform: scale(0.97); }
+
+        .seg-btn { transition: background .15s ease, color .15s ease, border-color .15s ease, transform .1s ease; }
+        .seg-btn:active { transform: scale(0.96); }
+        .seg-active { background: var(--ink); color: #fff; border-color: var(--ink); }
+        .seg-inactive { background: transparent; color: var(--ink); border-color: var(--mist); }
+        .seg-inactive:hover { background: var(--teal-bg); border-color: var(--teal); }
+
+        .nav-btn { transition: background .15s ease, opacity .15s ease; }
+        .nav-active { background: var(--ink); color: var(--mint-bg); }
+        .nav-inactive { background: transparent; color: var(--ink); opacity: 0.7; }
+        .nav-inactive:hover { opacity: 1; background: var(--teal-bg); }
+
+        .tab-btn { transition: opacity .15s ease, color .15s ease; }
+        .tab-active { color: var(--teal); opacity: 1; }
+        .tab-inactive { color: var(--ink); opacity: 0.5; }
+        .tab-inactive:hover { opacity: 0.85; }
+
+        .list-row { transition: background .15s ease, border-color .15s ease; }
+        .list-row:hover { background: var(--teal-bg); border-color: var(--teal); }
+
+        .step-btn { transition: background .15s ease; }
+        .step-btn:hover { background: var(--teal-bg); }
+      `}</style>
+
+      <Header page={page} setPage={setPage} t={t} lang={lang} onChangeLang={changeLang} />
+      <div key={page} className="fade-in">
+        {page === "home" && <HomePage onGoTracker={() => setPage("tracker")} onGoBooking={() => setPage("booking")} t={t} />}
+        {page === "tracker" && (
+          <TrackerPage
+            account={account}
+            checkins={checkins}
+            onSignIn={handleSignIn}
+            accountLoading={accountLoading}
+            accountNotice={accountNotice}
+            onPersistCheckins={persistCheckins}
+            onDeleteHistory={deleteHistory}
+            onSignOut={signOut}
+            onGoBooking={() => setPage("booking")}
+            onGoContact={goContact}
+            t={t}
+            lang={lang}
+          />
+        )}
+        {page === "contact" && contactCheckin && <ContactClinicPage checkin={contactCheckin} account={account} t={t} onBack={() => setPage("tracker")} />}
+        {page === "booking" && <BookingPage account={account} t={t} />}
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<RecoverLinkSite />);
+
+</script>
+</body>
+</html>
